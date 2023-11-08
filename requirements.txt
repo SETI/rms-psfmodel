@@ -1,0 +1,6 @@
+astropy
+coverage
+numpy
+Pillow
+pytest
+scipy

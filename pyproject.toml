@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools", "setuptools_scm[toml]"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rms-psfmodel"
+dynamic = ["version"]
+description = "Routines for converting to and from psfmodel dates"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+  "astropy",
+  "numpy",
+  "scipy"
+]
+license = {text = "Apache-2.0"}
+maintainers = [
+  {name = "Robert S. French", email = "rfrench@seti.org"}
+]
+keywords = ["psfmodel"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Natural Language :: English",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Astronomy",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Utilities",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows"
+]
+
+[project.urls]
+Homepage = "https://github.com/SETI/rms-psfmodel"
+Repository = "https://github.com/SETI/rms-psfmodel"
+Source = "https://github.com/SETI/rms-psfmodel"
+Issues = "https://github.com/SETI/rms-psfmodel/issues"
+
+[tool.setuptools]
+packages = ["psfmodel"]
+
+[tool.setuptools_scm]
+local_scheme = "no-local-version"
+write_to = "psfmodel/_version.py"
