@@ -1,23 +1,20 @@
-'''
-Created on Jan 5, 2012
-
-@author: rfrench
-'''
-
-try:
-    from tkinter import *
-except ImportError:
-    from Tkinter import *
+from pathlib import Path
+import sys
 
 import numpy as np
+from tkinter import *
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from psfmodel.gaussian import GaussianPSF
-from psfmodel.hst import HSTPSF
+# from psfmodel.hst import HSTPSF
 
 
 display_size = 32 # 64
 
-# PSF_TYPE = 'gaussian'
-PSF_TYPE = 'acshrc'
+PSF_TYPE = 'gaussian'
+# PSF_TYPE = 'acshrc'
 # PSF_TYPE = 'wfc3uvis'
 # PSF_TYPE = 'wfpc2pc1'
 
@@ -27,18 +24,11 @@ def command_refresh_psf(val):
     global psfobj
 
     if (psfobj is None or
-        (PSF_TYPE == 'gaussian' and
-         (psfobj.sigma_x != var_sigmax.get() or
-          psfobj.sigma_y != var_sigmay.get() or
-          psfobj.movement != (var_motiony.get(), var_motionx.get()))) or
         ((PSF_TYPE in ('acshrc', 'wfpc2pc1', 'wfc3uvis') and
-         (psfobj.subsample != var_subsample.get() or
-          psfobj.movement != (var_motiony.get(), var_motionx.get()))))):
+         psfobj.subsample != var_subsample.get()))):
         if PSF_TYPE == 'gaussian':
             print((var_motiony.get(), var_motionx.get()))
-            psfobj = GaussianPSF((var_sigmay.get(), var_sigmax.get()),
-                                 movement=(var_motiony.get(),
-                                           var_motionx.get()))
+            psfobj = GaussianPSF()
         elif PSF_TYPE == 'acshrc':
             psfobj = HSTPSF('ACS', 'HRC', 'F660N', 512, 512,
                             subsample=var_subsample.get()*2+1,
@@ -57,7 +47,9 @@ def command_refresh_psf(val):
     psf = psfobj.eval_rect(((var_psf_ysize.get()//2)*2+1,
                             (var_psf_xsize.get()//2)*2+1),
                            (var_y.get(), var_x.get()),
-                           output_dev_null=False)
+                           movement=(var_motiony.get(), var_motionx.get()),
+                           sigma=(var_sigmay.get(), var_sigmax.get()),
+                           angle=np.radians(var_angle.get()))
     print('PSF SUM', np.sum(psf))
     psf = psf**.5 #np.log10(psf+1e-10)
 
@@ -99,6 +91,8 @@ if __name__ == "__main__":
     var_sigmax.set(2.)
     var_sigmay = DoubleVar()
     var_sigmay.set(2.)
+    var_angle = DoubleVar()
+    var_angle.set(0.)
     var_psf_xsize = IntVar()
     var_psf_xsize.set(21)
     var_psf_ysize = IntVar()
@@ -144,6 +138,13 @@ if __name__ == "__main__":
         label.grid(row=gridrow, column=0, sticky=W)
         scale_sigmay = Scale(control_frame, orient=HORIZONTAL, from_=0.001, to=5., resolution=0.001,
                             variable=var_sigmay, command=command_refresh_psf)
+        scale_sigmay.grid(row=gridrow, column=1)
+        gridrow += 1
+
+        label = Label(control_frame, text='ANGLE')
+        label.grid(row=gridrow, column=0, sticky=W)
+        scale_sigmay = Scale(control_frame, orient=HORIZONTAL, from_=0., to=180, resolution=1,
+                            variable=var_angle, command=command_refresh_psf)
         scale_sigmay.grid(row=gridrow, column=1)
         gridrow += 1
 
