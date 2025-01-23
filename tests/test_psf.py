@@ -37,31 +37,31 @@ def test_bkgnd_gradient_coeffs():
     assert np.all(ret == exp)
 
     ret = PSF._background_gradient_coeffs((3, 3), 1)
-    exp = np.array([[[ 1., -1., -1.],
-                     [ 1.,  0., -1.],
-                     [ 1.,  1., -1.]],
+    exp = np.array([[[1., -1., -1.],
+                     [1.,  0., -1.],
+                     [1.,  1., -1.]],
 
-                    [[ 1., -1.,  0.],
-                     [ 1.,  0.,  0.],
-                     [ 1.,  1.,  0.]],
+                    [[1., -1.,  0.],
+                     [1.,  0.,  0.],
+                     [1.,  1.,  0.]],
 
-                    [[ 1., -1.,  1.],
-                     [ 1.,  0.,  1.],
-                     [ 1.,  1.,  1.]]])
+                    [[1., -1.,  1.],
+                     [1.,  0.,  1.],
+                     [1.,  1.,  1.]]])
     assert np.all(ret == exp)
 
     ret = PSF._background_gradient_coeffs((3, 3), 2)
-    exp = np.array([[[ 1., -1., -1.,  1.,  1.,  1.],
-                     [ 1.,  0., -1.,  0., -0.,  1.],
-                     [ 1.,  1., -1.,  1., -1.,  1.]],
+    exp = np.array([[[1., -1., -1.,  1.,  1.,  1.],
+                     [1.,  0., -1.,  0., -0.,  1.],
+                     [1.,  1., -1.,  1., -1.,  1.]],
 
-                    [[ 1., -1.,  0.,  1., -0.,  0.],
-                     [ 1.,  0.,  0.,  0.,  0.,  0.],
-                     [ 1.,  1.,  0.,  1.,  0.,  0.]],
+                    [[1., -1.,  0.,  1., -0.,  0.],
+                     [1.,  0.,  0.,  0.,  0.,  0.],
+                     [1.,  1.,  0.,  1.,  0.,  0.]],
 
-                    [[ 1., -1.,  1.,  1., -1.,  1.],
-                     [ 1.,  0.,  1.,  0.,  0.,  1.],
-                     [ 1.,  1.,  1.,  1.,  1.,  1.]]])
+                    [[1., -1.,  1.,  1., -1.,  1.],
+                     [1.,  0.,  1.,  0.,  0.,  1.],
+                     [1.,  1.,  1.,  1.,  1.,  1.]]])
     assert np.all(ret == exp)
 
 
@@ -89,7 +89,7 @@ def test_background_gradient_fit():
     npt.assert_array_almost_equal(np.array(bkgnd_params),
                                   np.array([0, 2, 0, 0, 0, 3, 0, 0, 0, 0]))
     assert np.sum(img_mask) == 0
-    img2 = PSF.background_gradient((5,5), bkgnd_params)
+    img2 = PSF.background_gradient((5, 5), bkgnd_params)
     npt.assert_array_almost_equal(img, img2)
 
     # All masked

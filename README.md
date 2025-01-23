@@ -1,7 +1,120 @@
-| PyPI Release | Test Status | Code Coverage |
-| ------------ | ----------- | ------------- |
-| [![PyPI version](https://badge.fury.io/py/rms-psfmodel.svg)](https://badge.fury.io/py/rms-psfmodel) | [![Build status](https://img.shields.io/github/actions/workflow/status/SETI/rms-psfmodel/run-tests.yml?branch=master)](https://github.com/SETI/rms-psfmodel/actions) | [![Code coverage](https://img.shields.io/codecov/c/github/SETI/rms-psfmodel/main?logo=codecov)](https://codecov.io/gh/SETI/rms-psfmodel) |
+[![GitHub release; latest by date](https://img.shields.io/github/v/release/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/releases)
+[![GitHub Release Date](https://img.shields.io/github/release-date/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/releases)
+[![Test Status](https://img.shields.io/github/actions/workflow/status/SETI/rms-psfmodel/run-tests.yml?branch=main)](https://github.com/SETI/rms-psfmodel/actions)
+[![Documentation Status](https://readthedocs.org/projects/rms-psfmodel/badge/?version=latest)](https://rms-psfmodel.readthedocs.io/en/latest/?badge=latest)
+[![Code coverage](https://img.shields.io/codecov/c/github/SETI/rms-psfmodel/main?logo=codecov)](https://codecov.io/gh/SETI/rms-psfmodel)
+<br />
+[![PyPI - Version](https://img.shields.io/pypi/v/rms-psfmodel)](https://pypi.org/project/rms-psfmodel)
+[![PyPI - Format](https://img.shields.io/pypi/format/rms-psfmodel)](https://pypi.org/project/rms-psfmodel)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/rms-psfmodel)](https://pypi.org/project/rms-psfmodel)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/rms-psfmodel)](https://pypi.org/project/rms-psfmodel)
+<br />
+[![GitHub commits since latest release](https://img.shields.io/github/commits-since/SETI/rms-psfmodel/latest)](https://github.com/SETI/rms-psfmodel/commits/main/)
+[![GitHub commit activity](https://img.shields.io/github/commit-activity/m/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/commits/main/)
+[![GitHub last commit](https://img.shields.io/github/last-commit/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/commits/main/)
+<br />
+[![Number of GitHub open issues](https://img.shields.io/github/issues-raw/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/issues)
+[![Number of GitHub closed issues](https://img.shields.io/github/issues-closed-raw/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/issues)
+[![Number of GitHub open pull requests](https://img.shields.io/github/issues-pr-raw/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/pulls)
+[![Number of GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/pulls)
+<br />
+![GitHub License](https://img.shields.io/github/license/SETI/rms-psfmodel)
+[![Number of GitHub stars](https://img.shields.io/github/stars/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/stargazers)
+![GitHub forks](https://img.shields.io/github/forks/SETI/rms-psfmodel)
 
-# rms-psfmodel
+# Introduction
 
-Supported versions: Python >= 3.8
+`psfmodel` is a set of classes for reading and searching star catalogs. Currently NAIF SPICE
+star catalogs, the Yale Bright Star Catalog (YBSC), and UCAC4 are supported.
+
+`psfmodel` is a product of the [PDS Ring-Moon Systems Node](https://pds-rings.seti.org).
+
+# Installation
+
+The `psfmodel` module is available via the `rms-psfmodel` package on PyPI and can be installed with:
+
+```sh
+pip install rms-psfmodel
+```
+
+# Getting Started
+
+The `psfmodel` module provides the `psfmodelalog` class, which is the superclass for classes
+that handle specific star catalogs. Each star catalog class takes an optional directory
+path to point at the root of the star catalog data; if no directory path is provided,
+the contents of an environment variable is used instead. Each path can be a full URL
+as supported by [`rms-filecache`](https://rms-filecache.readthedocs.io/en/latest/),
+allowing the catalog data to be downloaded (and cached locally) at runtime.
+
+- `Spicepsfmodelalog`
+  - The `dir` argument, if specified, must point to a directory containing NAIF SPICE
+    kernels.
+  - Otherwise, the environment variable `SPICE_PATH`, if defined, must contain a `Stars`
+    subdirectory with NAIF SPICE kernels.
+  - Otherwise, the environment variable `OOPS_RESOURCES` must contain a `SPICE/Stars`
+    subdirectory.
+- `YBSCpsfmodelalog`
+  - The `dir` argument, if specified, must point to a directory containing the file
+    `catalog`.
+  - Otherwise, the environment variable `YBSC_PATH` must point to that directory.
+- `UCAC4psfmodelalog`
+  - The `dir` argument, if specified, must point to a directory containing the directory
+    `u4b`.
+  - Otherwise, the environment variable `UCAC4_PATH` must point to that directory.
+
+Each star catalog returns stars as a class that is a subclass of `Star`. Each subclass
+contains the attributes provided by that star catalog, and none are guaranteed to be
+filled in for all stars:
+
+- `SpiceStar`
+- `YBSCStar`
+- `UCAC4Star`
+
+Details of each class are available in the [module documentation](https://rms-psfmodel.readthedocs.io/en/latest/module.html).
+
+Basic operation is as follows:
+
+```python
+from psfmodel import YBSCpsfmodelalog
+import numpy as np
+cat = YBSCpsfmodelalog()
+ra_vega = 279.2333
+dec_vega = 38.7836
+vega_list = list(cat.find_stars(ra_min=np.radians(ra_vega-0.1),
+                                ra_max=np.radians(ra_vega+0.1),
+                                dec_min=np.radians(dec_vega-0.1),
+                                dec_max=np.radians(dec_vega+0.1)))
+
+assert len(vega_list) == 1
+print(vega_list[0])
+```
+
+yields:
+
+```
+UNIQUE ID 7001 | RA 279.2345833° (18h36m56.300s) | DEC 38.7836111° (+038d47m1.000s)
+VMAG  0.030  | PM RA 259.135 mas/yr  | PM DEC 286.000 mas/yr
+TEMP 10800 | SCLASS A0Va
+Name "3Alp Lyr" | Durch "BD+38 3238" | Draper 172167 | SAO 67174 | FK5 699
+IR 1 Ref NASA | Multiple " " | Aitken 11510 None | Variable "Alp Lyr"
+SCLASS Code   | Galactic LON 67.44 LAT 19.24
+B-V 0.0 | U-B -0.01 | R-I -0.03
+Parallax TRIG 0.1230000 arcsec | RadVel -14.0 km/s V  | RotVel (v sin i) 15.0 km/s
+Double mag diff 10.40 Sep 62.80 arcsec Components AB # 5
+```
+
+# Contributing
+
+Information on contributing to this package can be found in the
+[Contributing Guide](https://github.com/SETI/rms-psfmodel/blob/main/CONTRIBUTING.md).
+
+# Links
+
+- [Documentation](https://rms-psfmodel.readthedocs.io)
+- [Repository](https://github.com/SETI/rms-psfmodel)
+- [Issue tracker](https://github.com/SETI/rms-psfmodel/issues)
+- [PyPi](https://pypi.org/project/rms-psfmodel)
+
+# Licensing
+
+This code is licensed under the [Apache License v2.0](https://github.com/SETI/rms-psfmodel/blob/main/LICENSE).

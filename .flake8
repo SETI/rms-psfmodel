@@ -1,5 +1,6 @@
 [flake8]
 max-line-length: 90
+exclude: hst.py
 extend-ignore =
     E129,E265
     # E129 visually indented line with same indent as next logical line

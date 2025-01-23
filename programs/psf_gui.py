@@ -11,7 +11,7 @@ from psfmodel.gaussian import GaussianPSF
 # from psfmodel.hst import HSTPSF
 
 
-display_size = 32 # 64
+display_size = 64
 
 PSF_TYPE = 'gaussian'
 # PSF_TYPE = 'acshrc'

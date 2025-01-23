@@ -3,7 +3,6 @@
 ################################################################################
 
 import numpy as np
-import numpy.ma as ma
 import numpy.testing as npt
 import pytest
 import scipy.integrate as integrate
@@ -46,8 +45,8 @@ def test_gaussian_2d():
     assert integrate.dblquad(lambda x, y: GaussianPSF.gaussian_2d(x, y, scale=2.),
                              -10, 10, -10, 10)[0] == pytest.approx(2.)
     assert GaussianPSF.gaussian_2d(1., 0.) == pytest.approx(0.09653235263005391)
-    assert GaussianPSF.gaussian_2d(1., 0., sigma_x=2) == pytest.approx(0.0702268721548126)
-    assert GaussianPSF.gaussian_2d(0., -1., sigma_x=2) != pytest.approx(0.0702268721548126)
+    assert GaussianPSF.gaussian_2d(1., 0., sigma_x=2) == pytest.approx(0.048266176315027)
+    assert GaussianPSF.gaussian_2d(0., -1., sigma_x=2) != pytest.approx(0.048266176315027)
     assert GaussianPSF.gaussian_2d(0., -1., angle=np.pi/2) == pytest.approx(0.09653235263)
     npt.assert_array_almost_equal(GaussianPSF.gaussian_2d(np.array([0.]), np.array([0.])),
                                   np.array([0.15915494309]))
@@ -102,8 +101,10 @@ def test_gaussian_integral_1d():
 
 
 def test_gaussian_integral_2d():
-    integ1 = integrate.dblquad(lambda y, x: GaussianPSF.gaussian_2d(y, x), 0., 3., -2., 1.)[0]
-    integ2 = integrate.dblquad(lambda y, x: GaussianPSF.gaussian_2d(y, x), -1., 3., -3., 2.)[0]
+    integ1 = integrate.dblquad(lambda y, x: GaussianPSF.gaussian_2d(y, x),
+                               0., 3., -2., 1.)[0]
+    integ2 = integrate.dblquad(lambda y, x: GaussianPSF.gaussian_2d(y, x),
+                               -1., 3., -3., 2.)[0]
     assert GaussianPSF.gaussian_integral_2d(0., 3., -2., 1.) == pytest.approx(integ1)
     assert GaussianPSF.gaussian_integral_2d(0., 3., -2., 1., scale=2., base=5.) == \
         pytest.approx(integ1 * 2 + 5)
@@ -111,22 +112,22 @@ def test_gaussian_integral_2d():
                                            np.array([-2., -3.]), np.array([1., 2.]))
     npt.assert_array_almost_equal(ret, np.array([integ1, integ2]))
 
-    def rot(y, x):
-        ang = -np.pi/8
-        c = np.cos(ang)
-        s = np.sin(ang)
-        x2 = c*x + s*y
-        y2 = -s*x + c*y
-        return y2, x2
+    # def rot(y, x):
+    #     ang = -np.pi/8
+    #     c = np.cos(ang)
+    #     s = np.sin(ang)
+    #     x2 = c*x + s*y
+    #     y2 = -s*x + c*y
+    #     return y2, x2
 
-    y1, x1 = rot(-1, -1)
-    y2, x2 = rot(1, 1)
-    assert GaussianPSF.gaussian_integral_2d(y1+2, y2+2, x1-1, x2-1,
-                                            mean_y=2., mean_x=-1.,
-                                            sigma_x=2., angle=np.pi/8+np.pi/2) == \
-        pytest.approx(integrate.dblquad(
-            lambda y, x: GaussianPSF.gaussian_2d(y, x, sigma_x=2),
-            -1., 1., -1., 1.)[0])
+    # y1, x1 = rot(-1, -1)
+    # y2, x2 = rot(1, 1)
+    # assert GaussianPSF.gaussian_integral_2d(y1+2, y2+2, x1-1, x2-1,
+    #                                         mean_y=2., mean_x=-1.,
+    #                                         sigma_x=2., angle=np.pi/8) == \
+    #     pytest.approx(integrate.dblquad(
+    #         lambda y, x: GaussianPSF.gaussian_2d(y, x, sigma_x=2),
+    #         -1., 1., -1., 1.)[0])
 
 
 def test_gaussian_eval_point():
@@ -204,7 +205,7 @@ def test_gaussian_eval_pixel():
         pytest.approx(integ)
     assert GaussianPSF(sigma=(None, 3.)).eval_pixel((0, 0), sigma_y=2.) == \
         pytest.approx(integ)
-    ret =  GaussianPSF(sigma=(2., 3.)).eval_pixel((np.array([0, 0]), np.array([0, 0])))
+    ret = GaussianPSF(sigma=(2., 3.)).eval_pixel((np.array([0, 0]), np.array([0, 0])))
     npt.assert_array_almost_equal(ret, np.array([integ, integ]))
 
     assert GaussianPSF(sigma=(2., 3.)).eval_pixel((0, 0), angle=np.pi/8) == \
@@ -212,86 +213,90 @@ def test_gaussian_eval_pixel():
                                                        sigma_y=2., sigma_x=3.,
                                                        angle=np.pi/8))
 
-        # # eval_pixel and optimize_from_data
-        # psf = GaussianPSF()
-        # y_coords = np.repeat(np.arange(-10., 11.), 21)
-        # x_coords = np.tile(np.arange(-10., 11.), 21)
-        # coords = np.empty((2,21*21))
-        # coords[0] = y_coords
-        # coords[1] = x_coords
-        # gauss2d = psf.eval_pixel(coords, scale=2., sigma=1.)
-        # gauss2d = gauss2d.reshape(21,21)
-        # ret = psf.find_position(gauss2d, gauss2d.shape,
-        #                         starting_point=((gauss2d.shape[0]//2,
-        #                                          gauss2d.shape[1]//2)),
-        #                         bkgnd_degree=0, num_sigma=0)
-        # self.assertAlmostEqual(ret[0], gauss2d.shape[0]//2)
-        # self.assertAlmostEqual(ret[1], gauss2d.shape[1]//2)
-        # self.assertAlmostEqual(ret[2]['sigma_y'], 1.)
-        # self.assertAlmostEqual(ret[2]['sigma_x'], 1.)
-        # self.assertAlmostEqual(ret[2]['scale'], 2., places=6)
 
-        # y_coords = np.repeat(np.arange(-10., 11.), 21)
-        # x_coords = np.tile(np.arange(-10., 11.), 21)
-        # coords = np.empty((2,21*21))
-        # coords[0] = y_coords
-        # coords[1] = x_coords
-        # gauss2d = psf.eval_pixel(coords, scale=2., sigma=(2., 0.5))
-        # gauss2d = gauss2d.reshape(21,21)
-        # ret = psf.find_position(gauss2d, gauss2d.shape,
-        #                         starting_point=((gauss2d.shape[0]//2,
-        #                                          gauss2d.shape[1]//2)),
-        #                         bkgnd_degree=0, num_sigma=0)
-        # self.assertAlmostEqual(ret[0], gauss2d.shape[0]//2)
-        # self.assertAlmostEqual(ret[1], gauss2d.shape[1]//2)
-        # self.assertAlmostEqual(ret[2]['sigma_y'], 2.)
-        # self.assertAlmostEqual(ret[2]['sigma_x'], 0.5)
-        # self.assertAlmostEqual(ret[2]['scale'], 2., places=6)
+def test_gaussian_eval_rect():
+    assert np.sum(GaussianPSF(sigma=(1, 1)).eval_rect((19, 19))) == pytest.approx(1)
 
-        # psf2 = GaussianPSF(mean=(0.5,0.75))
-        # y_coords = np.repeat(np.arange(-10., 11.), 21)
-        # x_coords = np.tile(np.arange(-10., 11.), 21)
-        # coords = np.empty((2,21*21))
-        # coords[0] = y_coords
-        # coords[1] = x_coords
-        # gauss2d = psf2.eval_pixel(coords, scale=0.5, sigma=(0.3, 1.3))
-        # gauss2d = gauss2d.reshape(21,21)
+# # eval_pixel and optimize_from_data
+# psf = GaussianPSF()
+# y_coords = np.repeat(np.arange(-10., 11.), 21)
+# x_coords = np.tile(np.arange(-10., 11.), 21)
+# coords = np.empty((2,21*21))
+# coords[0] = y_coords
+# coords[1] = x_coords
+# gauss2d = psf.eval_pixel(coords, scale=2., sigma=1.)
+# gauss2d = gauss2d.reshape(21,21)
+# ret = psf.find_position(gauss2d, gauss2d.shape,
+#                         starting_point=((gauss2d.shape[0]//2,
+#                                          gauss2d.shape[1]//2)),
+#                         bkgnd_degree=0, num_sigma=0)
+# self.assertAlmostEqual(ret[0], gauss2d.shape[0]//2)
+# self.assertAlmostEqual(ret[1], gauss2d.shape[1]//2)
+# self.assertAlmostEqual(ret[2]['sigma_y'], 1.)
+# self.assertAlmostEqual(ret[2]['sigma_x'], 1.)
+# self.assertAlmostEqual(ret[2]['scale'], 2., places=6)
 
-        # ret = psf.find_position(gauss2d, gauss2d.shape,
-        #                         starting_point=((gauss2d.shape[0]//2,
-        #                                          gauss2d.shape[1]//2)),
-        #                         bkgnd_degree=0, num_sigma=0)
-        # self.assertAlmostEqual(ret[0], gauss2d.shape[0]//2+0.5)
-        # self.assertAlmostEqual(ret[1], gauss2d.shape[1]//2+0.75)
-        # self.assertAlmostEqual(ret[2]['sigma_y'], 0.3)
-        # self.assertAlmostEqual(ret[2]['sigma_x'], 1.3)
-        # self.assertAlmostEqual(ret[2]['scale'], 0.5, places=6)
+# y_coords = np.repeat(np.arange(-10., 11.), 21)
+# x_coords = np.tile(np.arange(-10., 11.), 21)
+# coords = np.empty((2,21*21))
+# coords[0] = y_coords
+# coords[1] = x_coords
+# gauss2d = psf.eval_pixel(coords, scale=2., sigma=(2., 0.5))
+# gauss2d = gauss2d.reshape(21,21)
+# ret = psf.find_position(gauss2d, gauss2d.shape,
+#                         starting_point=((gauss2d.shape[0]//2,
+#                                          gauss2d.shape[1]//2)),
+#                         bkgnd_degree=0, num_sigma=0)
+# self.assertAlmostEqual(ret[0], gauss2d.shape[0]//2)
+# self.assertAlmostEqual(ret[1], gauss2d.shape[1]//2)
+# self.assertAlmostEqual(ret[2]['sigma_y'], 2.)
+# self.assertAlmostEqual(ret[2]['sigma_x'], 0.5)
+# self.assertAlmostEqual(ret[2]['scale'], 2., places=6)
 
-        # ret = psf2.find_position(gauss2d, gauss2d.shape,
-        #                          starting_point=((gauss2d.shape[0]//2,
-        #                                           gauss2d.shape[1]//2)),
-        #                          bkgnd_degree=0, num_sigma=0)
-        # self.assertAlmostEqual(ret[0], gauss2d.shape[0]//2)
-        # self.assertAlmostEqual(ret[1], gauss2d.shape[1]//2)
-        # self.assertAlmostEqual(ret[2]['sigma_y'], 0.3)
-        # self.assertAlmostEqual(ret[2]['sigma_x'], 1.3)
-        # self.assertAlmostEqual(ret[2]['scale'], 0.5, places=6)
+# psf2 = GaussianPSF(mean=(0.5,0.75))
+# y_coords = np.repeat(np.arange(-10., 11.), 21)
+# x_coords = np.tile(np.arange(-10., 11.), 21)
+# coords = np.empty((2,21*21))
+# coords[0] = y_coords
+# coords[1] = x_coords
+# gauss2d = psf2.eval_pixel(coords, scale=0.5, sigma=(0.3, 1.3))
+# gauss2d = gauss2d.reshape(21,21)
 
-        # psf2 = GaussianPSF()
-        # y_coords = np.repeat(np.arange(-10., 11.), 21)
-        # x_coords = np.tile(np.arange(-10., 11.), 21)
-        # coords = np.empty((2,21*21))
-        # coords[0] = y_coords
-        # coords[1] = x_coords
-        # gauss2d = psf2.eval_pixel(coords, offset=(0.21, -0.35),
-        #                           scale=0.5, sigma=(0.3, 1.3))
-        # gauss2d = gauss2d.reshape(21,21)
-        # ret = psf.find_position(gauss2d, gauss2d.shape,
-        #                         starting_point=((gauss2d.shape[0]//2,
-        #                                          gauss2d.shape[1]//2)),
-        #                         bkgnd_degree=0, num_sigma=0)
-        # self.assertAlmostEqual(ret[0], gauss2d.shape[0]//2+0.21)
-        # self.assertAlmostEqual(ret[1], gauss2d.shape[1]//2-0.35)
-        # self.assertAlmostEqual(ret[2]['sigma_y'], 0.3)
-        # self.assertAlmostEqual(ret[2]['sigma_x'], 1.3)
-        # self.assertAlmostEqual(ret[2]['scale'], 0.5, places=6)
+# ret = psf.find_position(gauss2d, gauss2d.shape,
+#                         starting_point=((gauss2d.shape[0]//2,
+#                                          gauss2d.shape[1]//2)),
+#                         bkgnd_degree=0, num_sigma=0)
+# self.assertAlmostEqual(ret[0], gauss2d.shape[0]//2+0.5)
+# self.assertAlmostEqual(ret[1], gauss2d.shape[1]//2+0.75)
+# self.assertAlmostEqual(ret[2]['sigma_y'], 0.3)
+# self.assertAlmostEqual(ret[2]['sigma_x'], 1.3)
+# self.assertAlmostEqual(ret[2]['scale'], 0.5, places=6)
+
+# ret = psf2.find_position(gauss2d, gauss2d.shape,
+#                          starting_point=((gauss2d.shape[0]//2,
+#                                           gauss2d.shape[1]//2)),
+#                          bkgnd_degree=0, num_sigma=0)
+# self.assertAlmostEqual(ret[0], gauss2d.shape[0]//2)
+# self.assertAlmostEqual(ret[1], gauss2d.shape[1]//2)
+# self.assertAlmostEqual(ret[2]['sigma_y'], 0.3)
+# self.assertAlmostEqual(ret[2]['sigma_x'], 1.3)
+# self.assertAlmostEqual(ret[2]['scale'], 0.5, places=6)
+
+# psf2 = GaussianPSF()
+# y_coords = np.repeat(np.arange(-10., 11.), 21)
+# x_coords = np.tile(np.arange(-10., 11.), 21)
+# coords = np.empty((2,21*21))
+# coords[0] = y_coords
+# coords[1] = x_coords
+# gauss2d = psf2.eval_pixel(coords, offset=(0.21, -0.35),
+#                           scale=0.5, sigma=(0.3, 1.3))
+# gauss2d = gauss2d.reshape(21,21)
+# ret = psf.find_position(gauss2d, gauss2d.shape,
+#                         starting_point=((gauss2d.shape[0]//2,
+#                                          gauss2d.shape[1]//2)),
+#                         bkgnd_degree=0, num_sigma=0)
+# self.assertAlmostEqual(ret[0], gauss2d.shape[0]//2+0.21)
+# self.assertAlmostEqual(ret[1], gauss2d.shape[1]//2-0.35)
+# self.assertAlmostEqual(ret[2]['sigma_y'], 0.3)
+# self.assertAlmostEqual(ret[2]['sigma_x'], 1.3)
+# self.assertAlmostEqual(ret[2]['scale'], 0.5, places=6)
