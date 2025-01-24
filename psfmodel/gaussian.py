@@ -544,7 +544,7 @@ class GaussianPSF(PSF):
 
         return rect
 
-    def eval_rect(self,
+    def eval_rect(self,  # type: ignore
                   rect_size: tuple[int, int],
                   offset: tuple[float, float] = (0.5, 0.5),
                   *,

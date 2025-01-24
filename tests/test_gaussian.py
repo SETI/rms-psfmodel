@@ -216,87 +216,165 @@ def test_gaussian_eval_pixel():
 
 def test_gaussian_eval_rect():
     assert np.sum(GaussianPSF(sigma=(1, 1)).eval_rect((19, 19))) == pytest.approx(1)
+    assert np.sum(GaussianPSF(sigma=(1, 1), angle=np.pi/4).eval_rect((19, 19))) == \
+        pytest.approx(1)
 
-# # eval_pixel and optimize_from_data
-# psf = GaussianPSF()
-# y_coords = np.repeat(np.arange(-10., 11.), 21)
-# x_coords = np.tile(np.arange(-10., 11.), 21)
-# coords = np.empty((2,21*21))
-# coords[0] = y_coords
-# coords[1] = x_coords
-# gauss2d = psf.eval_pixel(coords, scale=2., sigma=1.)
-# gauss2d = gauss2d.reshape(21,21)
-# ret = psf.find_position(gauss2d, gauss2d.shape,
-#                         starting_point=((gauss2d.shape[0]//2,
-#                                          gauss2d.shape[1]//2)),
-#                         bkgnd_degree=0, num_sigma=0)
-# self.assertAlmostEqual(ret[0], gauss2d.shape[0]//2)
-# self.assertAlmostEqual(ret[1], gauss2d.shape[1]//2)
-# self.assertAlmostEqual(ret[2]['sigma_y'], 1.)
-# self.assertAlmostEqual(ret[2]['sigma_x'], 1.)
-# self.assertAlmostEqual(ret[2]['scale'], 2., places=6)
+@pytest.mark.parametrize('use_angular_params', [True, False])
+@pytest.mark.parametrize('bkgnd_degree', [None, 0, 1, 2])
+def test_gaussian_find_position(use_angular_params, bkgnd_degree):
+    allow_nonzero_base = (bkgnd_degree is not None)
 
-# y_coords = np.repeat(np.arange(-10., 11.), 21)
-# x_coords = np.tile(np.arange(-10., 11.), 21)
-# coords = np.empty((2,21*21))
-# coords[0] = y_coords
-# coords[1] = x_coords
-# gauss2d = psf.eval_pixel(coords, scale=2., sigma=(2., 0.5))
-# gauss2d = gauss2d.reshape(21,21)
-# ret = psf.find_position(gauss2d, gauss2d.shape,
-#                         starting_point=((gauss2d.shape[0]//2,
-#                                          gauss2d.shape[1]//2)),
-#                         bkgnd_degree=0, num_sigma=0)
-# self.assertAlmostEqual(ret[0], gauss2d.shape[0]//2)
-# self.assertAlmostEqual(ret[1], gauss2d.shape[1]//2)
-# self.assertAlmostEqual(ret[2]['sigma_y'], 2.)
-# self.assertAlmostEqual(ret[2]['sigma_x'], 0.5)
-# self.assertAlmostEqual(ret[2]['scale'], 2., places=6)
+    # centered symmetric PSF, float sigma
+    psf = GaussianPSF()
+    gauss2d = psf.eval_rect((21, 21), scale=2., sigma=1.)
+    # if allow_nonzero_base:
+    #     psf._debug_opt = 10
+    ret = psf.find_position(gauss2d, gauss2d.shape,
+                            starting_point=((gauss2d.shape[0]//2,
+                                             gauss2d.shape[1]//2)),
+                            bkgnd_degree=bkgnd_degree,
+                            allow_nonzero_base=allow_nonzero_base,
+                            num_sigma=0,
+                            use_angular_params=use_angular_params)
+    assert ret[0] == pytest.approx(gauss2d.shape[0] / 2)
+    assert ret[1] == pytest.approx(gauss2d.shape[1] / 2)
+    assert ret[2]['sigma_y'] == pytest.approx(1., abs=5e-2)
+    assert ret[2]['sigma_x'] == pytest.approx(1., abs=5e-2)
+    assert ret[2]['scale'] == pytest.approx(2., abs=5e-2)
 
-# psf2 = GaussianPSF(mean=(0.5,0.75))
-# y_coords = np.repeat(np.arange(-10., 11.), 21)
-# x_coords = np.tile(np.arange(-10., 11.), 21)
-# coords = np.empty((2,21*21))
-# coords[0] = y_coords
-# coords[1] = x_coords
-# gauss2d = psf2.eval_pixel(coords, scale=0.5, sigma=(0.3, 1.3))
-# gauss2d = gauss2d.reshape(21,21)
+    # asymmetric PSF, float sigma
+    gauss2d = psf.eval_rect((21, 21), scale=2., sigma=(2., 0.5))
+    ret = psf.find_position(gauss2d, gauss2d.shape,
+                            starting_point=((gauss2d.shape[0]//2,
+                                             gauss2d.shape[1]//2)),
+                            bkgnd_degree=bkgnd_degree,
+                            bkgnd_ignore_center=(4, 4),
+                            allow_nonzero_base=allow_nonzero_base,
+                            num_sigma=0,
+                            use_angular_params=use_angular_params)
+    assert ret[0] == pytest.approx(gauss2d.shape[0] / 2, abs=1e-4)
+    assert ret[1] == pytest.approx(gauss2d.shape[1] / 2, abs=1e-4)
+    assert ret[2]['sigma_y'] == pytest.approx(2., abs=5e-2)
+    assert ret[2]['sigma_x'] == pytest.approx(0.5, abs=5e-2)
+    assert ret[2]['scale'] == pytest.approx(2., abs=7e-2)
 
-# ret = psf.find_position(gauss2d, gauss2d.shape,
-#                         starting_point=((gauss2d.shape[0]//2,
-#                                          gauss2d.shape[1]//2)),
-#                         bkgnd_degree=0, num_sigma=0)
-# self.assertAlmostEqual(ret[0], gauss2d.shape[0]//2+0.5)
-# self.assertAlmostEqual(ret[1], gauss2d.shape[1]//2+0.75)
-# self.assertAlmostEqual(ret[2]['sigma_y'], 0.3)
-# self.assertAlmostEqual(ret[2]['sigma_x'], 1.3)
-# self.assertAlmostEqual(ret[2]['scale'], 0.5, places=6)
+    # offset PSF created through mean, float sigma
+    psf2 = GaussianPSF(mean=(0.5, 0.75))
+    gauss2d = psf2.eval_rect((21, 21), scale=0.5, sigma=(0.5, 1.3))
 
-# ret = psf2.find_position(gauss2d, gauss2d.shape,
-#                          starting_point=((gauss2d.shape[0]//2,
-#                                           gauss2d.shape[1]//2)),
-#                          bkgnd_degree=0, num_sigma=0)
-# self.assertAlmostEqual(ret[0], gauss2d.shape[0]//2)
-# self.assertAlmostEqual(ret[1], gauss2d.shape[1]//2)
-# self.assertAlmostEqual(ret[2]['sigma_y'], 0.3)
-# self.assertAlmostEqual(ret[2]['sigma_x'], 1.3)
-# self.assertAlmostEqual(ret[2]['scale'], 0.5, places=6)
+    # find using non-offset PSF
+    ret = psf.find_position(gauss2d, gauss2d.shape,
+                            starting_point=((gauss2d.shape[0]//2,
+                                             gauss2d.shape[1]//2)),
+                            bkgnd_degree=bkgnd_degree,
+                            bkgnd_ignore_center=(4, 4),
+                            allow_nonzero_base=allow_nonzero_base,
+                            num_sigma=0,
+                            use_angular_params=use_angular_params)
+    assert ret[0] == pytest.approx(gauss2d.shape[0] / 2 + 0.5, abs=1e-1)
+    assert ret[1] == pytest.approx(gauss2d.shape[1] / 2 + 0.75, abs=1e-1)
+    assert ret[2]['sigma_y'] == pytest.approx(0.5, abs=5e-2)
+    assert ret[2]['sigma_x'] == pytest.approx(1.3, abs=5e-2)
+    assert ret[2]['scale'] == pytest.approx(0.5, abs=5e-2)
 
-# psf2 = GaussianPSF()
-# y_coords = np.repeat(np.arange(-10., 11.), 21)
-# x_coords = np.tile(np.arange(-10., 11.), 21)
-# coords = np.empty((2,21*21))
-# coords[0] = y_coords
-# coords[1] = x_coords
-# gauss2d = psf2.eval_pixel(coords, offset=(0.21, -0.35),
-#                           scale=0.5, sigma=(0.3, 1.3))
-# gauss2d = gauss2d.reshape(21,21)
-# ret = psf.find_position(gauss2d, gauss2d.shape,
-#                         starting_point=((gauss2d.shape[0]//2,
-#                                          gauss2d.shape[1]//2)),
-#                         bkgnd_degree=0, num_sigma=0)
-# self.assertAlmostEqual(ret[0], gauss2d.shape[0]//2+0.21)
-# self.assertAlmostEqual(ret[1], gauss2d.shape[1]//2-0.35)
-# self.assertAlmostEqual(ret[2]['sigma_y'], 0.3)
-# self.assertAlmostEqual(ret[2]['sigma_x'], 1.3)
-# self.assertAlmostEqual(ret[2]['scale'], 0.5, places=6)
+    # find using offset PSF
+    ret = psf2.find_position(gauss2d, gauss2d.shape,
+                             starting_point=((gauss2d.shape[0]//2,
+                                              gauss2d.shape[1]//2)),
+                             bkgnd_degree=bkgnd_degree,
+                             bkgnd_ignore_center=(4, 4),
+                             allow_nonzero_base=allow_nonzero_base,
+                             num_sigma=0,
+                             use_angular_params=use_angular_params)
+    assert ret[0] == pytest.approx(gauss2d.shape[0] / 2, abs=1e-1)
+    assert ret[1] == pytest.approx(gauss2d.shape[1] / 2, abs=1e-1)
+    assert ret[2]['sigma_y'] == pytest.approx(0.5, abs=5e-2)
+    assert ret[2]['sigma_x'] == pytest.approx(1.3, abs=5e-2)
+    assert ret[2]['scale'] == pytest.approx(0.5, abs=5e-2)
+
+    # offset PSF created through eval_rect, float sigma
+    psf2 = GaussianPSF()
+    gauss2d = psf2.eval_rect((21, 21), offset=(0.21, -0.35), scale=1.5, sigma=(0.8, 1.3))
+    ret = psf.find_position(gauss2d, gauss2d.shape,
+                            starting_point=((gauss2d.shape[0]//2,
+                                             gauss2d.shape[1]//2)),
+                            bkgnd_degree=bkgnd_degree,
+                            bkgnd_ignore_center=(4, 4),
+                            allow_nonzero_base=allow_nonzero_base,
+                            num_sigma=0,
+                            use_angular_params=use_angular_params)
+    assert ret[0] == pytest.approx(gauss2d.shape[0] // 2 + 0.21, abs=5e-2)
+    assert ret[1] == pytest.approx(gauss2d.shape[1] // 2 - 0.35, abs=5e-2)
+    assert ret[2]['sigma_y'] == pytest.approx(0.8, abs=1e-3)
+    assert ret[2]['sigma_x'] == pytest.approx(1.3, abs=1e-3)
+    assert ret[2]['scale'] == pytest.approx(1.5, abs=1e-2)
+
+    # centered PSF, fixed sigma
+    psf2 = GaussianPSF(sigma=(0.9, 1.5))
+    gauss2d = psf2.eval_rect((21, 21), scale=1.5)
+    ret = psf2.find_position(gauss2d, gauss2d.shape,
+                             starting_point=((gauss2d.shape[0]//2,
+                                              gauss2d.shape[1]//2)),
+                             bkgnd_degree=bkgnd_degree,
+                             allow_nonzero_base=allow_nonzero_base,
+                             num_sigma=0,
+                             use_angular_params=use_angular_params)
+    assert ret[0] == pytest.approx(gauss2d.shape[0] / 2, abs=1e-4)
+    assert ret[1] == pytest.approx(gauss2d.shape[1] / 2, abs=1e-4)
+    assert 'sigma_y' not in ret[2]
+    assert 'sigma_x' not in ret[2]
+    assert ret[2]['scale'] == pytest.approx(1.5, abs=2e-1)
+
+    # centered PSF, fixed sigma_y
+    psf2 = GaussianPSF(sigma=(0.9, None))
+    gauss2d = psf2.eval_rect((21, 21), scale=1.5, sigma_x=1.1)
+    ret = psf2.find_position(gauss2d, gauss2d.shape,
+                             starting_point=((gauss2d.shape[0]//2,
+                                              gauss2d.shape[1]//2)),
+                             bkgnd_degree=bkgnd_degree,
+                             allow_nonzero_base=allow_nonzero_base,
+                             num_sigma=0,
+                             use_angular_params=use_angular_params)
+    assert ret[0] == pytest.approx(gauss2d.shape[0] / 2, abs=1e-4)
+    assert ret[1] == pytest.approx(gauss2d.shape[1] / 2, abs=1e-4)
+    assert 'sigma_y' not in ret[2]
+    assert ret[2]['sigma_x'] == pytest.approx(1.1, abs=1e-1)
+    assert ret[2]['scale'] == pytest.approx(1.5, abs=1e-1)
+
+    # centered PSF, fixed sigma_x
+    psf2 = GaussianPSF(sigma=(None, 0.8))
+    gauss2d = psf2.eval_rect((21, 21), scale=1.5, sigma_y=1.1)
+    ret = psf2.find_position(gauss2d, gauss2d.shape,
+                             starting_point=((gauss2d.shape[0]//2,
+                                              gauss2d.shape[1]//2)),
+                             bkgnd_degree=bkgnd_degree,
+                             allow_nonzero_base=allow_nonzero_base,
+                             num_sigma=0,
+                             use_angular_params=use_angular_params)
+    assert ret[0] == pytest.approx(gauss2d.shape[0] / 2, abs=1e-4)
+    assert ret[1] == pytest.approx(gauss2d.shape[1] / 2, abs=1e-4)
+    assert 'sigma_x' not in ret[2]
+    assert ret[2]['sigma_y'] == pytest.approx(1.1, abs=1e-1)
+    assert ret[2]['scale'] == pytest.approx(1.5, abs=1e-1)
+
+    if bkgnd_degree is not None:
+        # add background gradient
+        gauss2d = psf.eval_rect((21, 21), scale=2., sigma=1.)
+        nparams = int((bkgnd_degree+1) * (bkgnd_degree+2) / 2)
+        coeffts = np.array([0.5] * nparams)
+        gauss2d += GaussianPSF.background_gradient((21, 21), coeffts)
+
+        # if allow_nonzero_base:
+        #     psf._debug_opt = 10
+        ret = psf.find_position(gauss2d, gauss2d.shape,
+                                starting_point=((gauss2d.shape[0]//2,
+                                                gauss2d.shape[1]//2)),
+                                bkgnd_degree=bkgnd_degree,
+                                allow_nonzero_base=allow_nonzero_base,
+                                num_sigma=0,
+                                use_angular_params=use_angular_params)
+        assert ret[0] == pytest.approx(gauss2d.shape[0] / 2, abs=1e-3)
+        assert ret[1] == pytest.approx(gauss2d.shape[1] / 2, abs=1e-2)
+        assert ret[2]['sigma_y'] == pytest.approx(1., abs=5e-2)
+        assert ret[2]['sigma_x'] == pytest.approx(1., abs=5e-2)
+        assert ret[2]['scale'] == pytest.approx(2., abs=5e-2)

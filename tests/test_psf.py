@@ -20,8 +20,6 @@ def test_bkgnd_gradient_coeffs():
     with pytest.raises(ValueError):
         PSF._background_gradient_coeffs((2, 1), 1)
     with pytest.raises(ValueError):
-        PSF._background_gradient_coeffs((1, 1), 0)
-    with pytest.raises(ValueError):
         PSF._background_gradient_coeffs((1, 1), -5)
 
     ret = PSF._background_gradient_coeffs((1, 1), 1)
@@ -72,8 +70,6 @@ def test_background_gradient_fit():
         PSF.background_gradient_fit(np.zeros((5, 4)))
     with pytest.raises(ValueError):
         PSF.background_gradient_fit(np.zeros((4, 5)))
-    with pytest.raises(ValueError):
-        PSF.background_gradient_fit(np.zeros((5, 5)), order=0)
     with pytest.raises(ValueError):
         PSF.background_gradient_fit(np.zeros((5, 5)), order=-10)
 
