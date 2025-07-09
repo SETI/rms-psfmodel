@@ -350,6 +350,10 @@ class PSF(ABC):
             if num_sigma is None:
                 break
 
+            # TODO - BITO suggests:
+            # worst_sigma = np.max(np.abs(delta_img))
+            # if worst_sigma >= sigma*num_sigma:
+            #     image[np.abs(delta_img) >= sigma*num_sigma] = ma.masked
             gradient = PSF.background_gradient(shape, coeffts)
             delta_img = image - gradient
             sigma = np.std(delta_img)
