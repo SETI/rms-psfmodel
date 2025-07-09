@@ -1,0 +1,9 @@
+[flake8]
+max-line-length: 90
+exclude: hst.py
+extend-ignore =
+    E129,E265
+    # E129 visually indented line with same indent as next logical line
+    # E265 block comment should start with '# '
+    # E266 too many leading '#' for block comment
+    # E265, E266

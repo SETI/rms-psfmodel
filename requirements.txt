@@ -1,6 +1,12 @@
 astropy
 coverage
+flake8
+mypy
+myst-parser
 numpy
 Pillow
 pytest
 scipy
+sphinx
+sphinxcontrib-napoleon
+sphinx-rtd-theme
