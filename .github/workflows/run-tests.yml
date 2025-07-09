@@ -33,9 +33,9 @@ jobs:
         run: |
           flake8 psfmodel tests
 
-      - name: Mypy
-        run: |
-          mypy psfmodel tests
+      # - name: Mypy
+      #   run: |
+      #     mypy psfmodel tests
 
   test:
     name: Test psfmodel

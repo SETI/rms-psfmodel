@@ -63,7 +63,8 @@ class PSF(ABC):
     #     """Evaluate the PSF integrated over an entire integer pixel.
 
     #     The returned array has the PSF offset from the center by (offset_y,offset_x). An
-    #     offset of (0, 0) places the PSF in the upper left corner of the center pixel while
+    #     offset of (0, 0) places the PSF in the upper left corner of the center pixel
+    # while
     #     an offset of (0.5, 0.5) places the PSF in the center of the center pixel. The
     #     offset should be limited to the range [0, 1).
 
@@ -810,7 +811,8 @@ class PSF(ABC):
         #     #  be multiplied by the variance of the residuals"
         #     dof = psf.shape[0]*psf.shape[1]-len(result)
         #     resid_var = np.sum(self._fit_psf_func(result, *extra_args)**2) / dof
-        #     cov = cov_x * resid_var  # In angle-parameter space!! (if use_angular_params)
+        #     cov = cov_x * resid_var  # In angle-parameter space!! (if
+        # use_angular_params)
         #     details['leastsq_cov'] = cov
         #     if use_angular_params:
         #         # Deriv of SL0 * sin(R0) is

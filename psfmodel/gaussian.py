@@ -150,8 +150,8 @@ class GaussianPSF(PSF):
     #         sigma_x: The standard deviation of the Gaussian in the X direction.
     #         mean_y: The mean of the Gaussian in the Y dimension.
     #         mean_x: The mean of the Gaussian in the X dimension.
-    #         scale: The scale of the Gaussian; the area under the complete curve (excluding
-    #             the base).
+    #         scale: The scale of the Gaussian; the area under the complete curve
+    #             (excluding the base).
     #         base: The base of the Gaussian; a scalar added to the curve.
     #         rho: The correlation between the X and Y dimensions
 
@@ -167,7 +167,8 @@ class GaussianPSF(PSF):
     #     """
 
     #     # See http://cs229.stanford.edu/section/gaussians.pdf
-    #     # See https://indico.cern.ch/category/6015/attachments/192/632/Statistics_Gaussian_I.pdf
+    #     # See https://indico.cern.ch/category/6015/attachments/192/632/
+    #           Statistics_Gaussian_I.pdf
     #     x = x - mean_x
     #     y = y - mean_y
 
