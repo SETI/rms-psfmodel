@@ -496,8 +496,8 @@ class PSF(ABC):
         half_box_size_y = box_size[0] // 2
         half_box_size_x = box_size[1] // 2
 
-        starting_pix = (int(np.round(starting_point[0])),
-                        int(np.round(starting_point[1])))
+        starting_pix = (int(starting_point[0]),
+                        int(starting_point[1]))
 
         if self._debug_opt:
             print('>> Entering psfmodel:find_position')
@@ -599,7 +599,8 @@ class PSF(ABC):
             #     msg += ' +/- {details["x_err"]:.4f}'
             if details['scale'] is not None:
                 msg += f' Scale {details["scale"]:.4f} Base {details["base"]:.4f}'
-            msg += f' SY {details["sigma_y"]:.4f} SX {details["sigma_x"]:.4f}'
+            if 'sigma_y' in details:
+                msg += f' SY {details["sigma_y"]:.4f} SX {details["sigma_x"]:.4f}'
             print(msg)
 
         return res_y + starting_pix[0], res_x + starting_pix[1], details
