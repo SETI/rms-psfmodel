@@ -1,7 +1,8 @@
 ################################################################################
-# psfmodel/__init__.py
+# psfmodel/psf.py
 ################################################################################
 
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, cast
 
@@ -21,21 +22,40 @@ except ImportError:  # pragma: no cover
 class PSF(ABC):
     """Abstract superclass for classes that model different types of PSFs."""
 
-    def __init__(self,
-                 **kwargs: Any) -> None:
-        """Create a PSF object. Only called by subclasses."""
+    def __init__(
+        self,
+        *,
+        logger: logging.Logger | None = None,
+        detailed_logging: bool = False,
+        **kwargs: Any,
+    ) -> None:
+        """Create a PSF object. Only called by subclasses.
 
-        self._debug_opt = 0
+        Parameters:
+            logger: Logger for diagnostic messages from this instance. If omitted,
+                uses :func:`logging.getLogger` with this module's ``__name__``.
+            detailed_logging: If True, emit INFO and DEBUG messages during fitting
+                (for example from :meth:`find_position`). Optimizer failure still logs
+                at WARNING when this is False.
+            **kwargs: Reserved for subclass forward-compatibility; unknown names are
+                ignored.
+        """
+
+        self._logger = logger if logger is not None else logging.getLogger(__name__)
+        self.detailed_logging = detailed_logging
         self._additional_params: list[Any] = []
 
     @abstractmethod
-    def eval_point(self,
-                   coord: (tuple[float | npt.NDArray[np.floating],
-                                 float | npt.NDArray[np.floating]] |
-                           npt.NDArray[np.floating]),
-                   *,
-                   scale: float = 1.,
-                   base: float = 0.) -> float | npt.NDArray[np.floating]:
+    def eval_point(
+        self,
+        coord: (
+            tuple[float | npt.NDArray[np.floating], float | npt.NDArray[np.floating]]
+            | npt.NDArray[np.floating]
+        ),
+        *,
+        scale: float = 1.0,
+        base: float = 0.0,
+    ) -> float | npt.NDArray[np.floating]:
         """Evaluate the PSF at a single, fractional, point.
 
         (0, 0) is the center of the PSF and x and y may be negative.
@@ -79,15 +99,17 @@ class PSF(ABC):
     #     ...
 
     @abstractmethod
-    def eval_rect(self,
-                  rect_size: list[int] | tuple[int, int],
-                  offset: list[float] | tuple[float, float] = (0.5, 0.5),
-                  *,
-                  movement: tuple[float, float] | None = None,
-                  movement_granularity: float = 0.1,
-                  scale: float = 1.,
-                  base: float = 0.,
-                  **kwargs: Any) -> npt.NDArray[np.float64]:
+    def eval_rect(
+        self,
+        rect_size: list[int] | tuple[int, int],
+        offset: list[float] | tuple[float, float] = (0.5, 0.5),
+        *,
+        movement: tuple[float, float] | None = None,
+        movement_granularity: float = 0.1,
+        scale: float = 1.0,
+        base: float = 0.0,
+        **kwargs: Any,
+    ) -> npt.NDArray[np.float64]:
         """Create a rectangular pixelated PSF.
 
         This is done by evaluating the PSF function from
@@ -120,25 +142,28 @@ class PSF(ABC):
         ...  # pragma: no cover
 
     @abstractmethod
-    def _eval_rect(self,
-                   rect_size: tuple[int, int],
-                   offset: tuple[float, float] = (0.5, 0.5),
-                   *,
-                   scale: float = 1.,
-                   base: float = 0.) -> npt.NDArray[np.float64]:
-        """Internal function to create a rectangular pixelated PSF without other checks.
-        """
+    def _eval_rect(
+        self,
+        rect_size: tuple[int, int],
+        offset: tuple[float, float] = (0.5, 0.5),
+        *,
+        scale: float = 1.0,
+        base: float = 0.0,
+    ) -> npt.NDArray[np.float64]:
+        """Internal function to create a rectangular pixelated PSF without other checks."""
         ...  # pragma: no cover
 
-    def _eval_rect_smeared(self,
-                           rect_size: tuple[int, int],
-                           offset: tuple[float, float] = (0.5, 0.5),
-                           *,
-                           movement: tuple[float, float] | None = None,
-                           movement_granularity: float = 0.1,
-                           scale: float = 1.,
-                           base: float = 0.,
-                           **kwargs: Any) -> npt.NDArray[np.floating]:
+    def _eval_rect_smeared(
+        self,
+        rect_size: tuple[int, int],
+        offset: tuple[float, float] = (0.5, 0.5),
+        *,
+        movement: tuple[float, float] | None = None,
+        movement_granularity: float = 0.1,
+        scale: float = 1.0,
+        base: float = 0.0,
+        **kwargs: Any,
+    ) -> npt.NDArray[np.floating]:
         """Evaluate and sum a PSF multiple times to simulate motion blur.
 
         Parameters:
@@ -157,46 +182,44 @@ class PSF(ABC):
         """
 
         if movement is None or (movement[0] == 0 and movement[1] == 0):
-            return self._eval_rect(rect_size, offset=offset,
-                                   scale=scale, base=base, **kwargs)
+            return self._eval_rect(rect_size, offset=offset, scale=scale, base=base, **kwargs)
 
-        num_steps = int(max(abs(movement[0]) / movement_granularity,
-                            abs(movement[1]) / movement_granularity))
+        num_steps = int(
+            max(abs(movement[0]) / movement_granularity, abs(movement[1]) / movement_granularity)
+        )
 
         if num_steps == 0:
-            step_y = 0.
-            step_x = 0.
+            step_y = 0.0
+            step_x = 0.0
         else:
             step_y = movement[0] / num_steps
             step_x = movement[1] / num_steps
 
         total_rect = None
 
-        for step in range(num_steps+1):
-            y = offset[0] + step_y*(step - num_steps/2.)
-            x = offset[1] + step_x*(step - num_steps/2.)
+        for step in range(num_steps + 1):
+            y = offset[0] + step_y * (step - num_steps / 2.0)
+            x = offset[1] + step_x * (step - num_steps / 2.0)
 
-            rect = self._eval_rect(rect_size, offset=(y, x),
-                                   scale=scale, base=base, **kwargs)
+            rect = self._eval_rect(rect_size, offset=(y, x), scale=scale, base=base, **kwargs)
             if total_rect is None:
                 total_rect = rect
             else:
                 total_rect += rect
         assert total_rect is not None
 
-        total_rect /= float(num_steps+1)
+        total_rect /= float(num_steps + 1)
 
         return total_rect
 
-    #==========================================================================
+    # ==========================================================================
     #
     # Static functions for creating background gradients
     #
-    #==========================================================================
+    # ==========================================================================
 
     @staticmethod
-    def _background_gradient_coeffs(shape: tuple[int, int],
-                                    order: int) -> npt.NDArray[np.float64]:
+    def _background_gradient_coeffs(shape: tuple[int, int], order: int) -> npt.NDArray[np.float64]:
         """Internal routine for creating the coefficient matrix.
 
         Fundamentally this creates a coefficient matrix indicating the powers of different
@@ -218,8 +241,7 @@ class PSF(ABC):
         """
 
         if shape[0] < 0 or shape[1] < 0 or shape[0] % 2 != 1 or shape[1] % 2 != 1:
-            raise ValueError(
-                f'Image must have odd positive shape in each dimension, got {shape}')
+            raise ValueError(f'Image must have odd positive shape in each dimension, got {shape}')
         if order < 0:
             raise ValueError(f'Order must be non-negative, got {order}')
 
@@ -228,15 +250,15 @@ class PSF(ABC):
         y_values = np.arange(shape[0])[:, np.newaxis] - int(shape[0] / 2)
         x_values = np.arange(shape[1])[np.newaxis, :] - int(shape[1] / 2)
 
-        y_powers: list[float | npt.NDArray[np.floating]] = [1.]
-        x_powers: list[float | npt.NDArray[np.floating]] = [1.]
+        y_powers: list[float | npt.NDArray[np.floating]] = [1.0]
+        x_powers: list[float | npt.NDArray[np.floating]] = [1.0]
 
-        nparams = int((order+1) * (order+2) / 2)
+        nparams = int((order + 1) * (order + 2) / 2)
         a3d = np.empty((shape[0], shape[1], nparams))
-        a3d[:, :, 0] = 1.  # This is the constant term of the polynomial
+        a3d[:, :, 0] = 1.0  # This is the constant term of the polynomial
 
         k = 0  # Parameter number
-        for p in range(1, order+1):
+        for p in range(1, order + 1):
             # This creates, sequentially, L, L**2, L**3... and S, S**2, S**3...
             y_powers.append(y_powers[-1] * y_values)
             x_powers.append(x_powers[-1] * x_values)
@@ -250,20 +272,22 @@ class PSF(ABC):
             #   X*Y
             #   Y**2
             #   X**2
-            for q in range(p+1):
+            for q in range(p + 1):
                 k += 1
-                a3d[:, :, k] = y_powers[q] * x_powers[p-q]
+                a3d[:, :, k] = y_powers[q] * x_powers[p - q]
 
         return a3d
 
     @staticmethod
-    def background_gradient_fit(image: npt.NDArray[np.floating],
-                                order: int = 2,
-                                ignore_center: int | tuple[int, int] | None = None,
-                                num_sigma: float | None = None,
-                                debug: bool = False
-                                ) -> tuple[npt.NDArray[np.float64] | None,
-                                           npt.NDArray[np.float64] | None]:
+    def background_gradient_fit(
+        image: npt.NDArray[np.floating],
+        order: int = 2,
+        ignore_center: int | tuple[int, int] | None = None,
+        num_sigma: float | None = None,
+        debug: bool = False,
+        *,
+        logger: logging.Logger | None = None,
+    ) -> tuple[npt.NDArray[np.float64] | None, npt.NDArray[np.float64] | None]:
         """Return the polynomial fit to the pixels of an image.
 
         Parameters:
@@ -275,18 +299,25 @@ class PSF(ABC):
             num_sigma: The number of sigma a pixel needs to be beyond the background
                 gradient to be ignored. None means don't ignore bad pixels.
             debug: Set to debug bad pixel removal.
+            logger: Logger for debug messages; defaults to this module's logger.
 
         Returns:
             A tuple of the background coefficient array and the mask of ignored pixels.
         """
 
+        fit_logger = logger if logger is not None else logging.getLogger(__name__)
+
         if len(image.shape) != 2:
-            raise ValueError('Image must be 2-D, got {image.shape}')
-        if (image.shape[0] < 0 or image.shape[1] < 0 or
-            image.shape[0] % 2 != 1 or image.shape[1] % 2 != 1):
+            raise ValueError(f'Image must be 2-D, got {image.shape}')
+        if (
+            image.shape[0] < 0
+            or image.shape[1] < 0
+            or image.shape[0] % 2 != 1
+            or image.shape[1] % 2 != 1
+        ):
             raise ValueError(
-                'Image must have odd positive shape in each dimension, got '
-                f'{image.shape}')
+                f'Image must have odd positive shape in each dimension, got {image.shape}'
+            )
         if order < 0:
             raise ValueError(f'Order must be non-negative, got {order}')
 
@@ -302,8 +333,7 @@ class PSF(ABC):
                 image = image.view(ma.MaskedArray)
 
         if isinstance(image, ma.MaskedArray):
-            image.mask = cast(npt.NDArray[np.bool_],
-                              ma.getmaskarray(image))  # type: ignore
+            image.mask = cast(npt.NDArray[np.bool_], ma.getmaskarray(image))
             is_masked = True
 
         if ignore_center is not None:
@@ -312,23 +342,26 @@ class PSF(ABC):
                 ignore_x = ignore_center
             else:
                 ignore_y, ignore_x = ignore_center
-            if ignore_y*2+1 >= shape[0] or ignore_x*2+1 >= shape[1]:
+            if ignore_y * 2 + 1 >= shape[0] or ignore_x * 2 + 1 >= shape[1]:
                 if debug:  # pragma: no cover
-                    print('BKGND CENTER IGNORED IS ENTIRE IMAGE')  # XXX
+                    fit_logger.debug('Background fit: ignore_center covers entire image')
                 return None, None
             ctr_y = shape[0] // 2
             ctr_x = shape[1] // 2
-            image[ctr_y-ignore_y:ctr_y+ignore_y+1,
-                  ctr_x-ignore_x:ctr_x+ignore_x+1] = ma.masked
+            image[
+                ctr_y - ignore_y : ctr_y + ignore_y + 1, ctr_x - ignore_x : ctr_x + ignore_x + 1
+            ] = ma.masked
 
-        nparams = int((order+1) * (order+2) // 2)
+        nparams = int((order + 1) * (order + 2) // 2)
 
         a3d = PSF._background_gradient_coeffs(shape, order)
 
         if num_sigma is not None:
             num_bad_pixels = cast(int, ma.count_masked(image))  # type: ignore
             if debug:  # pragma: no cover
-                print('BKGND GRAD INIT # BAD', num_bad_pixels)
+                fit_logger.debug(
+                    'Background gradient fit: initial masked pixel count %s', num_bad_pixels
+                )
 
         while True:
             # Reshape properly for linalg.lstsq
@@ -338,11 +371,13 @@ class PSF(ABC):
             if is_masked:
                 # linalg doesn't support masked arrays!
                 a2d = a2d[~b1d.mask]  # type: ignore
-                b1d = ma.compressed(b1d)  # type: ignore
+                b1d = ma.compressed(b1d)
 
             if a2d.shape[0] < a2d.shape[1]:  # Underconstrained
                 if debug:  # pragma: no cover
-                    print('BKGND UNDERCONSTRAINED', a2d.shape)
+                    fit_logger.debug(
+                        'Background gradient fit: underconstrained system %s', a2d.shape
+                    )
                 return None, None
 
             coeffts = linalg.lstsq(a2d, b1d)[0]
@@ -358,12 +393,14 @@ class PSF(ABC):
             delta_img = image - gradient
             sigma = np.std(delta_img)
             worst_sigma = np.max(np.abs(delta_img))
-            if worst_sigma >= sigma*num_sigma:
+            if worst_sigma >= sigma * num_sigma:
                 image[np.abs(delta_img) >= worst_sigma] = ma.masked
 
             new_num_bad_pixels = cast(int, ma.count_masked(image))  # type: ignore
             if debug:  # pragma: no cover
-                print('BKGD GRAD NEW # BAD', new_num_bad_pixels)
+                fit_logger.debug(
+                    'Background gradient fit: masked pixel count now %s', new_num_bad_pixels
+                )
             if new_num_bad_pixels == num_bad_pixels:
                 break
             num_bad_pixels = new_num_bad_pixels
@@ -374,8 +411,9 @@ class PSF(ABC):
             return coeffts, np.zeros(shape, dtype=np.bool_)
 
     @staticmethod
-    def background_gradient(rect_size: tuple[int, int],
-                            bkgnd_params: npt.ArrayLike) -> npt.NDArray[np.float64]:
+    def background_gradient(
+        rect_size: tuple[int, int], bkgnd_params: npt.ArrayLike
+    ) -> npt.NDArray[np.float64]:
         """Create a background gradient.
 
         Parameters:
@@ -387,35 +425,36 @@ class PSF(ABC):
 
         bkgnd_params = np.array(bkgnd_params)
 
-        order = int(np.sqrt(len(bkgnd_params)*2))-1
+        order = int(np.sqrt(len(bkgnd_params) * 2)) - 1
 
         a3d = PSF._background_gradient_coeffs(rect_size, order)
         result = np.sum(bkgnd_params * a3d, axis=-1)
 
         return cast(npt.NDArray[np.float64], result)
 
-    #==========================================================================
+    # ==========================================================================
     #
     # Functions for finding astrometric positions
     #
-    #==========================================================================
+    # ==========================================================================
 
-    def find_position(self,
-                      image: npt.NDArray[np.floating],
-                      box_size: tuple[int, int],
-                      starting_point: tuple[float, float],
-                      *,
-                      search_limit: float | tuple[float, float] = (1.5, 1.5),
-                      bkgnd_degree: int | None = 2,
-                      bkgnd_ignore_center: tuple[int, int] = (2, 2),
-                      bkgnd_num_sigma: float | None = None,
-                      tolerance: float = 1e-6,
-                      num_sigma: float | None = None,
-                      max_bad_frac: float = 0.2,
-                      allow_nonzero_base: bool = False,
-                      scale_limit: float = 1000.,
-                      use_angular_params: bool = True
-                      ) -> None | tuple[float, float, dict[str, Any]]:
+    def find_position(
+        self,
+        image: npt.NDArray[np.floating],
+        box_size: tuple[int, int],
+        starting_point: tuple[float, float],
+        *,
+        search_limit: float | tuple[float, float] = (1.5, 1.5),
+        bkgnd_degree: int | None = 2,
+        bkgnd_ignore_center: tuple[int, int] = (2, 2),
+        bkgnd_num_sigma: float | None = None,
+        tolerance: float = 1e-6,
+        num_sigma: float | None = None,
+        max_bad_frac: float = 0.2,
+        allow_nonzero_base: bool = False,
+        scale_limit: float = 1000.0,
+        use_angular_params: bool = True,
+    ) -> None | tuple[float, float, dict[str, Any]]:
         """Find the (y, x) coordinates that best fit a 2-D PSF to an image.
 
         Parameters:
@@ -474,8 +513,10 @@ class PSF(ABC):
                 'gradient'             The box_size background gradient.
                 'subimg-gradient'      The subimg with the background gradient
                                        subtracted.
-                'psf'                  The unit-scale and zero-base PSF.
-                'scaled_psf'           The fully scaled PSF with the base added.
+                'psf'                  The PSF model from eval_rect with the fitted
+                                       scale and base (same array as scaled_psf).
+                'scaled_psf'           Same as psf; model to compare to
+                                       subimg-gradient during outlier rejection.
                 'leastsq_cov'          The covariance matrix returned by leastsq
                                        as adjusted by the residual variance.
                 'leastsq_infodict'     The infodict returned by leastsq.
@@ -487,54 +528,73 @@ class PSF(ABC):
             the uncertainty ('param' and 'param_err').
         """
 
-        if (box_size[0] < 0 or box_size[1] < 0 or
-            box_size[0] % 2 != 1 or box_size[1] % 2 != 1):
+        if box_size[0] < 0 or box_size[1] < 0 or box_size[0] % 2 != 1 or box_size[1] % 2 != 1:
             raise ValueError(
-                'box_size must have odd positive shape in each dimension, '
-                f'got {box_size}')
+                f'box_size must have odd positive shape in each dimension, got {box_size}'
+            )
 
         half_box_size_y = box_size[0] // 2
         half_box_size_x = box_size[1] // 2
 
-        starting_pix = (int(starting_point[0]),
-                        int(starting_point[1]))
+        starting_pix = (int(starting_point[0]), int(starting_point[1]))
 
-        if self._debug_opt:
-            print('>> Entering psfmodel:find_position')
-            print('Image is masked', isinstance(image, ma.MaskedArray))
-            print('Image num masked', np.sum(ma.getmaskarray(image)))  # type: ignore
-            print('Image min, max, mean', np.min(image), np.max(image), np.mean(image))
-            print('Box size', box_size)
-            print('Starting point', starting_point)
-            print('Search limit', search_limit)
-            print('Bkgnd degree', bkgnd_degree)
-            print('Bkgnd ignore center', bkgnd_ignore_center)
-            print('Bkgnd num sigma', bkgnd_num_sigma)
-            print('Tolerance', tolerance)
-            print('Num sigma', num_sigma)
-            print('Max bad frac', max_bad_frac)
-            print('Allow nonzero base', allow_nonzero_base)
-            print('Scale limit', scale_limit)
-            print('Use angular params', use_angular_params)
-            print('-----')
+        if self.detailed_logging:
+            self._logger.info('find_position: entering')
+            self._logger.info(
+                'find_position: image masked=%s num_masked=%s',
+                isinstance(image, ma.MaskedArray),
+                int(np.sum(ma.getmaskarray(image))),
+            )
+            self._logger.info(
+                'find_position: image min=%s max=%s mean=%s',
+                float(np.min(image)),
+                float(np.max(image)),
+                float(np.mean(image)),
+            )
+            self._logger.info(
+                'find_position: box_size=%s starting_point=%s search_limit=%s',
+                box_size,
+                starting_point,
+                search_limit,
+            )
+            self._logger.info(
+                'find_position: bkgnd_degree=%s bkgnd_ignore_center=%s '
+                'bkgnd_num_sigma=%s tolerance=%s num_sigma=%s max_bad_frac=%s '
+                'allow_nonzero_base=%s scale_limit=%s use_angular_params=%s',
+                bkgnd_degree,
+                bkgnd_ignore_center,
+                bkgnd_num_sigma,
+                tolerance,
+                num_sigma,
+                max_bad_frac,
+                allow_nonzero_base,
+                scale_limit,
+                use_angular_params,
+            )
 
         # Too close to the edge means we can't search
-        if (starting_pix[0] - half_box_size_y < 0 or
-            starting_pix[0] + half_box_size_y >= image.shape[0] or
-            starting_pix[1] - half_box_size_x < 0 or
-            starting_pix[1] + half_box_size_x >= image.shape[1]):
-            if self._debug_opt:
-                print('Too close to the edge - search impossible')
+        if (
+            starting_pix[0] - half_box_size_y < 0
+            or starting_pix[0] + half_box_size_y >= image.shape[0]
+            or starting_pix[1] - half_box_size_x < 0
+            or starting_pix[1] + half_box_size_x >= image.shape[1]
+        ):
+            if self.detailed_logging:
+                self._logger.info('find_position: too close to image edge, aborting')
             return None
 
-        sub_img = image[starting_pix[0] - half_box_size_y:
-                        starting_pix[0] + half_box_size_y+1,
-                        starting_pix[1] - half_box_size_x:
-                        starting_pix[1] + half_box_size_x+1]
+        sub_img = image[
+            starting_pix[0] - half_box_size_y : starting_pix[0] + half_box_size_y + 1,
+            starting_pix[1] - half_box_size_x : starting_pix[1] + half_box_size_x + 1,
+        ]
 
-        if self._debug_opt:
-            print('Sub img min, max, mean', np.min(sub_img), np.max(sub_img),
-                  np.mean(sub_img))
+        if self.detailed_logging:
+            self._logger.info(
+                'find_position: subimage min=%s max=%s mean=%s',
+                float(np.min(sub_img)),
+                float(np.max(sub_img)),
+                float(np.mean(sub_img)),
+            )
 
         if not isinstance(search_limit, (list, tuple)):
             search_limit = (float(search_limit), float(search_limit))
@@ -549,16 +609,22 @@ class PSF(ABC):
         num_bad_pixels = 0
 
         while True:
-            if self._debug_opt > 1:
-                print('MAIN LOOP: FIND POS, # BAD PIXELS', num_bad_pixels)
-            ret = self._find_position(sub_img,
-                                      search_limit, scale_limit,
-                                      bkgnd_degree, bkgnd_ignore_center,
-                                      bkgnd_num_sigma, tolerance,
-                                      allow_nonzero_base, use_angular_params)
+            if self.detailed_logging:
+                self._logger.debug('find_position: outer loop bad_pixel_count=%s', num_bad_pixels)
+            ret = self._find_position(
+                sub_img,
+                search_limit,
+                scale_limit,
+                bkgnd_degree,
+                bkgnd_ignore_center,
+                bkgnd_num_sigma,
+                tolerance,
+                allow_nonzero_base,
+                use_angular_params,
+            )
             if ret is None:
-                if self._debug_opt:
-                    print('find_position returned None')
+                if self.detailed_logging:
+                    self._logger.info('find_position: inner fit returned None')
                 return None
 
             res_y, res_x, details = ret
@@ -566,53 +632,54 @@ class PSF(ABC):
             if not num_sigma:
                 break
 
-            resid = np.sqrt((details['subimg-gradient'] - details['scaled_psf'])**2)
+            resid = np.sqrt((details['subimg-gradient'] - details['scaled_psf']) ** 2)
             resid_std = np.std(resid)
 
-            if self._debug_opt > 1:
-                print('MAIN LOOP: Resid', resid)
-                print('resid_std', resid_std)
+            if self.detailed_logging:
+                self._logger.debug('find_position: residual per pixel=%s', resid)
+                self._logger.debug('find_position: resid_std=%s', resid_std)
 
             if num_sigma is not None:
-                sub_img[np.where(resid > num_sigma*resid_std)] = ma.masked
+                sub_img[np.where(resid > num_sigma * resid_std)] = ma.masked
 
             new_num_bad_pixels = ma.count_masked(sub_img)  # type: ignore
             if new_num_bad_pixels == num_bad_pixels:
                 break
             if new_num_bad_pixels == sub_img.size:
-                if self._debug_opt:
-                    print('MAIN LOOP: All pixels masked - find_position returning None')
+                if self.detailed_logging:
+                    self._logger.info('find_position: all pixels masked, returning None')
                 return None  # All masked
-            if new_num_bad_pixels > max_bad_frac*sub_img.size:
-                if self._debug_opt:
-                    print('MAIN LOOP: Too many pixels masked - '
-                          'find_position returning None')
+            if new_num_bad_pixels > max_bad_frac * sub_img.size:
+                if self.detailed_logging:
+                    self._logger.info('find_position: too many pixels masked, returning None')
                 return None  # Too many masked
             num_bad_pixels = new_num_bad_pixels
 
-        if self._debug_opt:
-            msg = f'find_position returning Y {res_y+starting_pix[0]:.4f}'
+        if self.detailed_logging:
+            msg = f'find_position returning Y {res_y + starting_pix[0]:.4f}'
             # if details['y_err'] is not None:
             #     msg += f' +/- {details["y_err"]:.4f}'
-            msg += f' X {res_x+starting_pix[1]:.4f}'
+            msg += f' X {res_x + starting_pix[1]:.4f}'
             # if details['x_err'] is not None:
             #     msg += ' +/- {details["x_err"]:.4f}'
             if details['scale'] is not None:
                 msg += f' Scale {details["scale"]:.4f} Base {details["base"]:.4f}'
             if 'sigma_y' in details:
                 msg += f' SY {details["sigma_y"]:.4f} SX {details["sigma_x"]:.4f}'
-            print(msg)
+            self._logger.info(msg)
 
         return res_y + starting_pix[0], res_x + starting_pix[1], details
 
-    def _fit_psf_func(self,
-                      params: tuple[float, ...],
-                      sub_img: npt.NDArray[np.floating],
-                      search_limit: tuple[float, float],
-                      scale_limit: float,
-                      allow_nonzero_base: bool,
-                      use_angular_params: bool,
-                      *additional_params: Any) -> float:
+    def _fit_psf_func(
+        self,
+        params: tuple[float, ...],
+        sub_img: npt.NDArray[np.floating],
+        search_limit: tuple[float, float],
+        scale_limit: float,
+        allow_nonzero_base: bool,
+        use_angular_params: bool,
+        *additional_params: Any,
+    ) -> float:
 
         # Make an offset of "0" be the center of the pixel (0.5, 0.5)
         if use_angular_params:
@@ -637,12 +704,12 @@ class PSF(ABC):
             # if fake_resid is not None:
             #     fake_return = np.zeros(sub_img.shape).flatten()
             #     fake_return[:] = fake_resid
-            #     if self._debug_opt > 1:
+            #     if self.detailed_logging:
             #         full_resid = np.sqrt(np.sum(fake_return**2))
             #         print('RESID', full_resid)
             #     return fake_return
 
-        base = 0.
+        base = 0.0
         param_end = 3
         if allow_nonzero_base:
             base = params[3]
@@ -651,41 +718,45 @@ class PSF(ABC):
         addl_vals_dict = {}
         for i, ap in enumerate(additional_params):
             if use_angular_params:
-                val = ((ap[1] - ap[0]) / 2. *
-                       (np.cos(params[param_end+i])+1.) + ap[0])
+                val = (ap[1] - ap[0]) / 2.0 * (np.cos(params[param_end + i]) + 1.0) + ap[0]
             else:
-                val = params[param_end+i]
+                val = params[param_end + i]
             addl_vals_dict[ap[2]] = val
 
-        psf = self.eval_rect(cast(tuple[int, int], sub_img.shape),
-                             (offset_y, offset_x),
-                             scale=scale, base=base, **addl_vals_dict)
+        psf = self.eval_rect(
+            cast(tuple[int, int], sub_img.shape),
+            (offset_y, offset_x),
+            scale=scale,
+            base=base,
+            **addl_vals_dict,
+        )
 
         resid = (sub_img - psf).flatten()
 
         full_resid = cast(float, np.sqrt(np.sum(resid**2)))
 
-        if self._debug_opt > 1:
+        if self.detailed_logging:
             msg = f'OFFY {offset_y:8.5f} OFFX {offset_x:8.5f} SCALE {scale:9.5f} '
             msg += f'BASE {base:9.5f}'
             for ap in additional_params:
                 msg += f' {ap[2].upper()} {addl_vals_dict[ap[2]]:8.5f}'
             msg += f' RESID {full_resid:f}'
-            print(msg)
+            self._logger.debug(msg)
 
         return full_resid
 
-    def _find_position(self,
-                       sub_img: npt.NDArray[np.floating],
-                       search_limit: tuple[float, float],
-                       scale_limit: float,
-                       bkgnd_degree: int | None,
-                       bkgnd_ignore_center: tuple[int, int],
-                       bkgnd_num_sigma: float | None,
-                       tolerance: float,
-                       allow_nonzero_base: bool,
-                       use_angular_params: bool
-                       ) -> None | tuple[float, float, dict[str, Any]]:
+    def _find_position(
+        self,
+        sub_img: npt.NDArray[np.floating],
+        search_limit: tuple[float, float],
+        scale_limit: float,
+        bkgnd_degree: int | None,
+        bkgnd_ignore_center: tuple[int, int],
+        bkgnd_num_sigma: float | None,
+        tolerance: float,
+        allow_nonzero_base: bool,
+        use_angular_params: bool,
+    ) -> None | tuple[float, float, dict[str, Any]]:
 
         bkgnd_params = None
         bkgnd_mask = None
@@ -693,36 +764,37 @@ class PSF(ABC):
 
         if bkgnd_degree is not None:
             bkgnd_params, bkgnd_mask = PSF.background_gradient_fit(
-                                           sub_img,
-                                           order=bkgnd_degree,
-                                           ignore_center=bkgnd_ignore_center,
-                                           num_sigma=bkgnd_num_sigma,
-                                           debug=self._debug_opt > 2)
+                sub_img,
+                order=bkgnd_degree,
+                ignore_center=bkgnd_ignore_center,
+                num_sigma=bkgnd_num_sigma,
+                debug=self.detailed_logging,
+                logger=self._logger,
+            )
             if bkgnd_params is None:
                 return None
 
-            gradient = PSF.background_gradient(cast(tuple[int, int], sub_img.shape),
-                                               bkgnd_params)
+            gradient = PSF.background_gradient(cast(tuple[int, int], sub_img.shape), bkgnd_params)
 
         sub_img_grad = sub_img - gradient
 
         # Offset Y, Offset X, Scale, AdditionalParams
         if use_angular_params:
-            bounds = [(0., np.pi),
-                      (0., np.pi),
-                      (0., np.pi)]
-            starting_guess = [np.pi/2, np.pi/2, np.pi/2]
+            bounds = [(0.0, np.pi), (0.0, np.pi), (0.0, np.pi)]
+            starting_guess = [np.pi / 2, np.pi / 2, np.pi / 2]
             if allow_nonzero_base:
-                bounds += [(0., np.pi)]
-                starting_guess += [np.pi/2]
+                bounds += [(0.0, np.pi)]
+                starting_guess += [np.pi / 2]
             for _ in range(len(self._additional_params)):
-                bounds += [(0., np.pi)]
-                starting_guess += [np.pi/2]
+                bounds += [(0.0, np.pi)]
+                starting_guess += [np.pi / 2]
         else:
-            bounds = [(-search_limit[0], search_limit[0]),
-                      (-search_limit[1], search_limit[1]),
-                      (0., scale_limit)]
-            starting_guess = [0.001, 0.001, scale_limit/2]
+            bounds = [
+                (-search_limit[0], search_limit[0]),
+                (-search_limit[1], search_limit[1]),
+                (0.0, scale_limit),
+            ]
+            starting_guess = [0.001, 0.001, scale_limit / 2]
             if allow_nonzero_base:
                 bounds += [(-1e38, 1e38)]
                 starting_guess += [0.001]
@@ -730,26 +802,32 @@ class PSF(ABC):
                 bounds += [(a_min, a_max)]
                 starting_guess.append(np.mean([a_min, a_max]))
 
-        extra_args0 = (sub_img_grad, search_limit, scale_limit,
-                       allow_nonzero_base, use_angular_params)
-        if (self._additional_params is not None and
-            len(self._additional_params) > 0):
+        extra_args0 = (
+            sub_img_grad,
+            search_limit,
+            scale_limit,
+            allow_nonzero_base,
+            use_angular_params,
+        )
+        if self._additional_params is not None and len(self._additional_params) > 0:
             extra_args = extra_args0 + tuple(self._additional_params)
         else:
             extra_args = extra_args0
 
-        if self._debug_opt > 3:
-            print('-' * 80)
-            print(f'STARTING GUESS: {starting_guess}')
-            print(f'BOUNDS: {bounds}')
+        if self.detailed_logging:
+            self._logger.debug('-' * 80)
+            self._logger.debug('_find_position: starting_guess=%s', starting_guess)
+            self._logger.debug('_find_position: bounds=%s', bounds)
 
-        full_result = sciopt.minimize(self._fit_psf_func,
-                                      starting_guess,
-                                      args=extra_args,
-                                      bounds=bounds,
-                                      tol=tolerance,
-                                      method='Powell',
-                                      options={'maxiter': len(starting_guess) * 10000})
+        full_result = sciopt.minimize(
+            self._fit_psf_func,
+            starting_guess,
+            args=extra_args,
+            bounds=bounds,
+            tol=tolerance,
+            method='Powell',
+            options={'maxiter': len(starting_guess) * 10000},
+        )
 
         result = full_result.x
         success = full_result.success
@@ -757,7 +835,7 @@ class PSF(ABC):
         message = full_result.message
 
         if not success:
-            print('FAIL', message)
+            self._logger.warning('find_position: optimizer did not succeed: %s', message)
             return None
 
         # if ier < 1 or ier > 4:
@@ -772,7 +850,7 @@ class PSF(ABC):
             offset_x = result[1] + 0.5
             scale = result[2]
 
-        base = 0.
+        base = 0.0
         result_end = 3
         if allow_nonzero_base:
             base = result[3]
@@ -781,14 +859,18 @@ class PSF(ABC):
         addl_vals_dict = {}
         for i, ap in enumerate(self._additional_params):
             if use_angular_params:
-                val = ((ap[1] - ap[0]) / 2. *
-                       (np.cos(result[result_end+i])+1.) + ap[0])
+                val = (ap[1] - ap[0]) / 2.0 * (np.cos(result[result_end + i]) + 1.0) + ap[0]
             else:
-                val = result[result_end+i]
+                val = result[result_end + i]
             addl_vals_dict[ap[2]] = val
 
-        psf = self.eval_rect(cast(tuple[int, int], sub_img.shape), (offset_y, offset_x),
-                             scale=scale, base=base, **addl_vals_dict)
+        psf = self.eval_rect(
+            cast(tuple[int, int], sub_img.shape),
+            (offset_y, offset_x),
+            scale=scale,
+            base=base,
+            **addl_vals_dict,
+        )
 
         details = {}
         details['x'] = offset_x
@@ -801,7 +883,7 @@ class PSF(ABC):
         details['psf'] = psf
         details['scale'] = scale
         details['base'] = base
-        details['scaled_psf'] = psf*scale+base
+        details['scaled_psf'] = psf
 
         # if cov_x is None:
         #     details['leastsq_cov'] = None
@@ -855,34 +937,22 @@ class PSF(ABC):
         for key in addl_vals_dict:
             details[key] = addl_vals_dict[key]
 
-        if self._debug_opt > 1:
-            print('_find_position RETURNING', offset_y, offset_x)
-            print('Subimg num bad pixels',
-                  np.sum(ma.getmaskarray(sub_img)))  # type: ignore
-            print('Bkgnd params', bkgnd_params)
-            print('Bkgnd mask bad pixels',
-                  np.sum(ma.getmaskarray(bkgnd_mask)))  # type: ignore
-            print('PSF scale', scale)
-            print('PSF base', base)
+        if self.detailed_logging:
+            self._logger.debug(
+                '_find_position: returning offset_y=%s offset_x=%s', offset_y, offset_x
+            )
+            self._logger.debug(
+                '_find_position: subimage masked pixels=%s', int(np.sum(ma.getmaskarray(sub_img)))
+            )
+            self._logger.debug('_find_position: bkgnd_params=%s', bkgnd_params)
+            if bkgnd_mask is not None:
+                self._logger.debug(
+                    '_find_position: bkgnd_mask bad pixels=%s',
+                    int(np.sum(ma.getmaskarray(bkgnd_mask))),
+                )
+            self._logger.debug('_find_position: PSF scale=%s base=%s', scale, base)
             for key in addl_vals_dict:
-                print(key, details[key])
-            # print('LEASTSQ COV')
-            # cov = details['leastsq_cov']
-            # print(cov)
-            # if cov is not None:
-            #     print('X_ERR', details['x_err'])
-            #     print('Y_ERR', details['y_err'])
-            #     print('SCALE_ERR', details['scale_err'])
-            #     print('BASE_ERR', details['base_err'])
-            #     for key in addl_vals_dict:
-            #         print(key+'_err', details[key+'_err'])
-            print('MESSAGE', message)
-            print('STATUS', status)
-            print('-----')
+                self._logger.debug('_find_position: %s=%s', key, details[key])
+            self._logger.debug('_find_position: optimizer message=%s status=%s', message, status)
 
         return offset_y, offset_x, details
-
-        print('hi')
-
-def _dead_code():
-    pass

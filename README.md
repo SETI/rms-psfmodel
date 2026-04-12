@@ -30,8 +30,10 @@
 
 # Introduction
 
-`psfmodel` is a set of classes for reading and searching star catalogs. Currently NAIF SPICE
-star catalogs, the Yale Bright Star Catalog (YBSC), and UCAC4 are supported.
+`psfmodel` provides abstract and concrete classes for modeling point spread functions (PSFs)
+and fitting them to image data. It includes an analytic 2-D Gaussian PSF with optional
+rotation, pixel integration, motion smearing, and background polynomial fitting, plus helpers
+for astrometric position estimation via bounded optimization.
 
 `psfmodel` is a product of the [PDS Ring-Moon Systems Node](https://pds-rings.seti.org).
 

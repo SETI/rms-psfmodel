@@ -267,9 +267,17 @@ class HSTPSF(PSF):
             jitter_x/y/z      The amount of jitter (in mas) to apply to the
                               PSF; z is the angle; None means use the default
                               for the instrument/detector
+
+        Additional keyword arguments are passed to :class:`PSF`: ``logger`` and
+        ``detailed_logging`` (see :meth:`PSF.__init__`).
         """
 
-        PSF.__init__(self, movement, movement_granularity)
+        _logger = kwargs.pop('logger', None)
+        _detailed_logging = bool(kwargs.pop('detailed_logging', False))
+        PSF.__init__(self, logger=_logger, detailed_logging=_detailed_logging)
+
+        self.movement = movement if movement is not None else (0.0, 0.0)
+        self.movement_granularity = movement_granularity
 
         self.instrument = instrument
         self.detector = detector
