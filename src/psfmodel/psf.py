@@ -3,7 +3,7 @@
 ################################################################################
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 import numpy as np
 import numpy.ma as ma
@@ -83,7 +83,7 @@ class PSF(ABC):
                   rect_size: list[int] | tuple[int, int],
                   offset: list[float] | tuple[float, float] = (0.5, 0.5),
                   *,
-                  movement: Optional[tuple[float, float]] = None,
+                  movement: tuple[float, float] | None = None,
                   movement_granularity: float = 0.1,
                   scale: float = 1.,
                   base: float = 0.,
@@ -134,7 +134,7 @@ class PSF(ABC):
                            rect_size: tuple[int, int],
                            offset: tuple[float, float] = (0.5, 0.5),
                            *,
-                           movement: Optional[tuple[float, float]] = None,
+                           movement: tuple[float, float] | None = None,
                            movement_granularity: float = 0.1,
                            scale: float = 1.,
                            base: float = 0.,
@@ -259,8 +259,8 @@ class PSF(ABC):
     @staticmethod
     def background_gradient_fit(image: npt.NDArray[np.floating],
                                 order: int = 2,
-                                ignore_center: Optional[int | tuple[int, int]] = None,
-                                num_sigma: Optional[float] = None,
+                                ignore_center: int | tuple[int, int] | None = None,
+                                num_sigma: float | None = None,
                                 debug: bool = False
                                 ) -> tuple[npt.NDArray[np.float64] | None,
                                            npt.NDArray[np.float64] | None]:
@@ -408,9 +408,9 @@ class PSF(ABC):
                       search_limit: float | tuple[float, float] = (1.5, 1.5),
                       bkgnd_degree: int | None = 2,
                       bkgnd_ignore_center: tuple[int, int] = (2, 2),
-                      bkgnd_num_sigma: Optional[float] = None,
+                      bkgnd_num_sigma: float | None = None,
                       tolerance: float = 1e-6,
-                      num_sigma: Optional[float] = None,
+                      num_sigma: float | None = None,
                       max_bad_frac: float = 0.2,
                       allow_nonzero_base: bool = False,
                       scale_limit: float = 1000.,
@@ -726,9 +726,9 @@ class PSF(ABC):
             if allow_nonzero_base:
                 bounds += [(-1e38, 1e38)]
                 starting_guess += [0.001]
-            for a_min, a_max, a_name in self._additional_params:
+            for a_min, a_max, _a_name in self._additional_params:
                 bounds += [(a_min, a_max)]
-                starting_guess = starting_guess + [np.mean([a_min, a_max])]
+                starting_guess.append(np.mean([a_min, a_max]))
 
         extra_args0 = (sub_img_grad, search_limit, scale_limit,
                        allow_nonzero_base, use_angular_params)
@@ -736,7 +736,7 @@ class PSF(ABC):
             len(self._additional_params) > 0):
             extra_args = extra_args0 + tuple(self._additional_params)
         else:
-            extra_args = extra_args0 + tuple([])
+            extra_args = extra_args0
 
         if self._debug_opt > 3:
             print('-' * 80)
@@ -881,3 +881,8 @@ class PSF(ABC):
             print('-----')
 
         return offset_y, offset_x, details
+
+        print('hi')
+
+def _dead_code():
+    pass

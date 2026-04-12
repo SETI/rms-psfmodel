@@ -3,21 +3,24 @@ requires = ["setuptools", "setuptools_scm[toml]"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "rms-psfmodel"
+name = "psfmodel"
 dynamic = ["version"]
-description = "Routines for converting to and from psfmodel dates"
+description = "PSF model fitting"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
   "astropy",
   "numpy",
   "scipy"
 ]
 license = {text = "Apache-2.0"}
+authors = [
+  {name = "Robert S. French", email = "rfrench@seti.org"}
+]
 maintainers = [
   {name = "Robert S. French", email = "rfrench@seti.org"}
 ]
-keywords = ["psfmodel"]
+keywords = ["TODO"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Natural Language :: English",
@@ -26,25 +29,129 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Python Modules",
   "Topic :: Utilities",
   "License :: OSI Approved :: Apache Software License",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Operating System :: MacOS :: MacOS X",
   "Operating System :: POSIX :: Linux",
   "Operating System :: Microsoft :: Windows"
 ]
 
 [project.urls]
-Homepage = "https://github.com/SETI/rms-psfmodel"
-Repository = "https://github.com/SETI/rms-psfmodel"
-Source = "https://github.com/SETI/rms-psfmodel"
-Issues = "https://github.com/SETI/rms-psfmodel/issues"
+Homepage = "https://github.com/SETI/psfmodel"
+Documentation = "https://psfmodel.readthedocs.io/en/latest"
+Repository = "https://github.com/SETI/psfmodel"
+Source = "https://github.com/SETI/psfmodel"
+Issues = "https://github.com/SETI/psfmodel/issues"
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "src"
+]
+addopts = ["-n", "4", "--cov=src"]
 
 [tool.setuptools]
-packages = ["psfmodel"]
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"TODO" = ["py.typed"]
 
 [tool.setuptools_scm]
 local_scheme = "no-local-version"
-write_to = "psfmodel/_version.py"
+write_to = "src/psfmodel/_version.py"
+
+[project.optional-dependencies]
+dev = [
+  "psfmodel",
+  "coverage>=7.0",
+  # "mypy>=1.0",
+  "pymarkdownlnt>=0.9.35",
+  "pytest>=7.0",
+  "pytest-cov>=4.0",
+  "pytest-xdist>=3.8.0",
+  "ruff>=0.8",
+  # "bandit[toml]>=1.8",
+  "pyroma>=4.2",
+  # "vulture>=2.14",
+  "psfmodel[docs]",
+]
+docs = [
+  "myst-parser",
+  "sphinx>=7",
+  "sphinxcontrib-mermaid",
+  "sphinx-rtd-theme",
+]
+
+[project.scripts]
+#TODO = "main.psfmodel:main"
+
+# Tool configuration
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
+omit = ["tests/*", "_version.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "def __repr__",
+  "raise NotImplementedError",
+]
+fail_under = 40  # TODO
+
+[tool.mypy]
+strict = true
+disallow_subclassing_any = false
+
+[[tool.mypy.overrides]]
+module = "psfmodel._version"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# module = ["psfmodel.*"]
+# ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+exclude = [
+  "src/psfmodel/hst.py"  # TODO
+]
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint]
+# Explicit rule set (recommended for library projects). Categories:
+# E, W = pycodestyle errors/warnings; F = Pyflakes; I = isort; UP = pyupgrade;
+# B = bugbear; SIM = simplify; C4 = comprehensions; A = builtins (no shadowing);
+# N = pep8-naming; PT = pytest-style; RUF = Ruff-specific (e.g. unused noqa).
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "A", "N", "PT", "RUF"]
+# PT011 - pytest.raises is too broad.
+# SIM105 - Use contextlib.suppress for suppressions.
+# SIM108 - Use ternary operator for simple if/else.
+extend-ignore = ["PT011", "SIM105", "SIM108"]
+
+[tool.ruff.lint.per-file-ignores]
+#"TODO" = ["TODO"]
+
+[tool.pymarkdown.plugins.md013]
+# Line length (disable so README/CONTRIBUTING can use longer lines).
+enabled = false
+
+[tool.pymarkdown.plugins.md033]
+# Inline HTML (e.g. <br>) allowed in Markdown.
+enabled = false
+
+# Uncomment when enabling bandit in [project.optional-dependencies].dev.
+# [tool.bandit]
+# exclude_dirs = ["tests", "venv", ".venv"]
+# targets = ["src"]
+
+# Uncomment when enabling vulture in [project.optional-dependencies].dev.
+# [tool.vulture]
+# paths = ["src"]
+# exclude = ["tests/"]

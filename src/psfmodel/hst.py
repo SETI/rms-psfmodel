@@ -6,11 +6,10 @@ import os
 
 import astropy.io.fits as pyfits
 import numpy as np
-from scipy.interpolate import RectBivariateSpline
 import scipy.signal as scisig
+from scipy.interpolate import RectBivariateSpline
 
-from psfmodel import PSF
-
+from .psf import PSF
 
 #===============================================================================
 #

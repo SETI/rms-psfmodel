@@ -1,3 +1,7 @@
+# rms-psfmodel
+
+<!-- pyml disable MD025 -->
+
 [![GitHub release; latest by date](https://img.shields.io/github/v/release/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/releases)
 [![GitHub Release Date](https://img.shields.io/github/release-date/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/releases)
 [![Test Status](https://img.shields.io/github/actions/workflow/status/SETI/rms-psfmodel/run-tests.yml?branch=main)](https://github.com/SETI/rms-psfmodel/actions)
@@ -21,6 +25,8 @@
 ![GitHub License](https://img.shields.io/github/license/SETI/rms-psfmodel)
 [![Number of GitHub stars](https://img.shields.io/github/stars/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/stargazers)
 ![GitHub forks](https://img.shields.io/github/forks/SETI/rms-psfmodel)
+[![DOI](https://zenodo.org/badge/rms-psfmodel.svg)](https://zenodo.org/badge/latestdoi/rms-psfmodel)
+<!-- start-after-point -->
 
 # Introduction
 

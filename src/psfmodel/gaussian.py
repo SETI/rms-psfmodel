@@ -2,14 +2,13 @@
 # psfmodel/gaussian.py
 ################################################################################
 
-from typing import Optional, cast
+from typing import cast
 
 import numpy as np
 import numpy.typing as npt
 from scipy.special import erf
 
-from psfmodel import PSF
-
+from .psf import PSF
 
 INV_SQRT_2 = 2**(-0.5)
 
@@ -27,7 +26,7 @@ class GaussianPSF(PSF):
 
     def __init__(self,
                  *,
-                 sigma: Optional[float | tuple[float | None, float | None]] = None,
+                 sigma: float | tuple[float | None, float | None] | None = None,
                  mean: float | tuple[float, float] = 0.,
                  angle: float = 0.,
                  sigma_x_range: tuple[float, float] = (0.01, 10.),
@@ -71,17 +70,15 @@ class GaussianPSF(PSF):
                 f'angle_subsample must be an int between 1 and 99, got {angle_subsample}')
         self._angle_subsample = int(angle_subsample)
 
-        if self._sigma_y is None:
-            if sigma_y_range is not None:
-                self._additional_params.append((float(sigma_y_range[0]),
-                                                float(sigma_y_range[1])) +
-                                               ('sigma_y',))
-        if self._sigma_x is None:
-            if sigma_x_range is not None:
-                self._additional_params.append((float(sigma_x_range[0]),
-                                                float(sigma_x_range[1])) +
-                                               ('sigma_x',))
-        if self._angle is None:
+        if self._sigma_y is None and sigma_y_range is not None:
+            self._additional_params.append((float(sigma_y_range[0]),
+                                            float(sigma_y_range[1]),
+                                            'sigma_y'))
+        if self._sigma_x is None and sigma_x_range is not None:
+            self._additional_params.append((float(sigma_x_range[0]),
+                                            float(sigma_x_range[1]),
+                                            'sigma_x'))
+        if self._angle is None and angle_subsample > 1:
             self._additional_params.append((0, np.pi, 'angle'))
 
     @property
@@ -219,15 +216,15 @@ class GaussianPSF(PSF):
         x = x - mean_x
         y = y - mean_y
 
-        # Convert x and y (ellipse coordinates) to X and Y (Cartesian
+        # Convert x and y (ellipse coordinates) to xc and yc (Cartesian
         # coordinates)
         c = np.cos(angle)
         s = np.sin(angle)
-        X = c*x + s*y
-        Y = -s*x + c*y
+        xc = c*x + s*y
+        yc = -s*x + c*y
 
-        return (GaussianPSF.gaussian_1d(X, sigma=sigma_x) *
-                GaussianPSF.gaussian_1d(Y, sigma=sigma_y) *
+        return (GaussianPSF.gaussian_1d(xc, sigma=sigma_x) *
+                GaussianPSF.gaussian_1d(yc, sigma=sigma_y) *
                 scale + base)
 
     @staticmethod
@@ -372,12 +369,12 @@ class GaussianPSF(PSF):
                                  float | npt.NDArray[np.floating]] |
                            npt.NDArray[np.floating]),
                    *,
-                   sigma: Optional[float] = None,
+                   sigma: float | None = None,
                    scale: float = 1.,
                    base: float = 0.,
-                   sigma_y: Optional[float] = None,
-                   sigma_x: Optional[float] = None,
-                   angle: Optional[float] = None) -> float | npt.NDArray[np.floating]:
+                   sigma_y: float | None = None,
+                   sigma_x: float | None = None,
+                   angle: float | None = None) -> float | npt.NDArray[np.floating]:
         """Evaluate the 2-D Gaussian PSF at a single, fractional, point.
 
         (0, 0) is the center of the PSF and x and y may be negative.
@@ -443,10 +440,10 @@ class GaussianPSF(PSF):
                    *,
                    scale: float = 1.,
                    base: float = 0.,
-                   sigma: Optional[tuple[float, float]] = None,
-                   sigma_y: Optional[float] = None,
-                   sigma_x: Optional[float] = None,
-                   angle: Optional[float] = None) -> float | npt.NDArray[np.floating]:
+                   sigma: tuple[float, float] | None = None,
+                   sigma_y: float | None = None,
+                   sigma_x: float | None = None,
+                   angle: float | None = None) -> float | npt.NDArray[np.floating]:
         """Evaluate the Gaussian PSF integrated over an entire integer pixel.
 
         The returned array has the PSF offset from the center by (offset_y, offset_x). An
@@ -521,10 +518,10 @@ class GaussianPSF(PSF):
                    *,
                    scale: float = 1.,
                    base: float = 0.,
-                   sigma: Optional[tuple[float, float]] = None,
-                   sigma_y: Optional[float] = None,
-                   sigma_x: Optional[float] = None,
-                   angle: Optional[float] = None
+                   sigma: tuple[float, float] | None = None,
+                   sigma_y: float | None = None,
+                   sigma_x: float | None = None,
+                   angle: float | None = None
                    ) -> npt.NDArray[np.floating]:
 
         rect_size_y, rect_size_x = rect_size
@@ -549,14 +546,14 @@ class GaussianPSF(PSF):
                   rect_size: tuple[int, int],
                   offset: tuple[float, float] = (0.5, 0.5),
                   *,
-                  movement: Optional[tuple[float, float]] = None,
+                  movement: tuple[float, float] | None = None,
                   movement_granularity: float = 0.1,
                   scale: float = 1.,
                   base: float = 0.,
-                  sigma: Optional[tuple[float, float]] = None,
-                  sigma_y: Optional[float] = None,
-                  sigma_x: Optional[float] = None,
-                  angle: Optional[float] = None) -> npt.NDArray[np.floating]:
+                  sigma: tuple[float, float] | None = None,
+                  sigma_y: float | None = None,
+                  sigma_x: float | None = None,
+                  angle: float | None = None) -> npt.NDArray[np.floating]:
         """Create a rectangular pixelated Gaussian PSF.
 
         This is done by evaluating the PSF function from
