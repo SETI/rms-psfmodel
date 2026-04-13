@@ -111,6 +111,8 @@ def _write_outputs(
     n_box = len(box_sizes)
     n_sigma = len(sigmas)
     pos_err_grid = np.full((n_box, n_sigma), float('nan'))
+    pos_err_y_grid = np.full((n_box, n_sigma), float('nan'))
+    pos_err_x_grid = np.full((n_box, n_sigma), float('nan'))
     sigma_y_err_grid = np.full((n_box, n_sigma), float('nan'))
     sigma_x_err_grid = np.full((n_box, n_sigma), float('nan'))
     scale_err_grid = np.full((n_box, n_sigma), float('nan'))
@@ -124,6 +126,8 @@ def _write_outputs(
                 fail_mask[b_idx, s_idx] = True
             else:
                 pos_err_grid[b_idx, s_idx] = r.pos_err
+                pos_err_y_grid[b_idx, s_idx] = abs(r.pos_err_y)
+                pos_err_x_grid[b_idx, s_idx] = abs(r.pos_err_x)
                 if r.sigma_y_err is not None:
                     sigma_y_err_grid[b_idx, s_idx] = abs(r.sigma_y_err)
                 if r.sigma_x_err is not None:
@@ -136,7 +140,9 @@ def _write_outputs(
     y_labels = [str(b) for b in box_sizes]
 
     for data, title, filename in [
-        (pos_err_grid, 'Position error vs. box size and sigma', 'pos_err.png'),
+        (pos_err_grid, 'Position error (Euclidean) vs. box size and sigma', 'pos_err.png'),
+        (pos_err_y_grid, '|pos_err_y| vs. box size and sigma', 'pos_err_y.png'),
+        (pos_err_x_grid, '|pos_err_x| vs. box size and sigma', 'pos_err_x.png'),
         (
             sigma_y_err_grid,
             'Relative |sigma_y| error vs. box size and sigma',

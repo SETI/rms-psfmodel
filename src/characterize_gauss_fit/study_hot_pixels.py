@@ -141,39 +141,42 @@ def _write_outputs(
     n_hot = len(n_hot_list)
 
     for ha_idx, hot_amp in enumerate(hot_amps):
-        y_means: list[npt.NDArray[np.float64]] = []
-        y_stds: list[npt.NDArray[np.float64]] = []
+        for metric_attr, metric_label, fname_prefix in [
+            ('pos_err',   'Mean position error, Euclidean (pixels)', 'pos_err'),
+            ('pos_err_y', 'Mean |pos_err_y| (pixels)',               'pos_err_y'),
+            ('pos_err_x', 'Mean |pos_err_x| (pixels)',               'pos_err_x'),
+        ]:
+            y_means: list[npt.NDArray[np.float64]] = []
+            y_stds: list[npt.NDArray[np.float64]] = []
+            for ns_val, _ns_label in zip(num_sigma_list, ns_labels, strict=True):
+                means: list[float] = []
+                stds: list[float] = []
+                for n_hot_count in n_hot_list:
+                    bucket: list[TrialResult] = []
+                    for spec, result in zip(specs, results, strict=False):
+                        if (
+                            spec.hot_pixel_count == n_hot_count
+                            and spec.num_sigma == ns_val
+                            and abs(spec.hot_pixel_amplitude - hot_amp) < 1e-9
+                        ):
+                            bucket.append(result)
+                    arr = np.abs(utils.collect_metric(bucket, metric_attr))
+                    means.append(utils.safe_nanmean(arr))
+                    stds.append(utils.safe_nanstd(arr))
+                y_means.append(np.array(means))
+                y_stds.append(np.array(stds))
 
-        for ns_val in num_sigma_list:
-            means: list[float] = []
-            stds: list[float] = []
-            for n_hot_count in n_hot_list:
-                # Find matching results.
-                bucket: list[TrialResult] = []
-                for spec, result in zip(specs, results, strict=False):
-                    if (
-                        spec.hot_pixel_count == n_hot_count
-                        and spec.num_sigma == ns_val
-                        and abs(spec.hot_pixel_amplitude - hot_amp) < 1e-9
-                    ):
-                        bucket.append(result)
-                arr = utils.collect_metric(bucket, 'pos_err')
-                means.append(utils.safe_nanmean(arr))
-                stds.append(utils.safe_nanstd(arr))
-            y_means.append(np.array(means))
-            y_stds.append(np.array(stds))
-
-        fig = plot_line_with_bands(
-            x_arr,
-            y_means,
-            y_stds,
-            labels=ns_labels,
-            title=f'Position error vs. hot pixels -- amplitude={hot_amp:.0f}x peak',
-            xlabel='Number of hot pixels',
-            ylabel='Mean position error (pixels)',
-            log_y=True,
-        )
-        save_figure(fig, study_dir, f'pos_err_hotamp{ha_idx}.png')
+            fig = plot_line_with_bands(
+                x_arr,
+                y_means,
+                y_stds,
+                labels=ns_labels,
+                title=f'{metric_label} vs. hot pixels -- amplitude={hot_amp:.0f}x peak',
+                xlabel='Number of hot pixels',
+                ylabel=metric_label,
+                log_y=True,
+            )
+            save_figure(fig, study_dir, f'{fname_prefix}_hotamp{ha_idx}.png')
 
     _ = n_hot
     _ = n_ns

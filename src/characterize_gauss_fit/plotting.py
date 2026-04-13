@@ -373,22 +373,26 @@ def plot_constraint_summary(
     categories: list[str],
     group_labels: list[str],
     pos_err_vals: npt.NDArray[np.float64],
+    pos_err_y_vals: npt.NDArray[np.float64],
+    pos_err_x_vals: npt.NDArray[np.float64],
     scale_err_vals: npt.NDArray[np.float64],
     sigma_y_err_vals: npt.NDArray[np.float64],
     angle_err_vals: npt.NDArray[np.float64],
     *,
     title: str,
 ) -> Figure:
-    """Create a 4-panel grouped bar chart for Study 5 constraint modes.
+    """Create a 6-panel grouped bar chart for Study 5 constraint modes.
 
-    Shows position error, scale error, sigma_y error, and angle error side by
-    side so that the effect of parameter constraints on all metrics is visible
-    at once.
+    Shows position error (Euclidean, Y-axis, and X-axis), scale error,
+    sigma_y error, and angle error side by side so that the effect of parameter
+    constraints on all metrics is visible at once.
 
     Parameters:
         categories: Constraint mode names (X-axis categories).
         group_labels: PSF shape labels (bar groups within each category).
-        pos_err_vals: ``(n_cat, n_groups)`` position error array.
+        pos_err_vals: ``(n_cat, n_groups)`` Euclidean position error array.
+        pos_err_y_vals: ``(n_cat, n_groups)`` absolute Y-axis position error.
+        pos_err_x_vals: ``(n_cat, n_groups)`` absolute X-axis position error.
         scale_err_vals: ``(n_cat, n_groups)`` relative scale error array.
         sigma_y_err_vals: ``(n_cat, n_groups)`` relative sigma_y error array.
         angle_err_vals: ``(n_cat, n_groups)`` absolute angle error array (rad).
@@ -397,12 +401,14 @@ def plot_constraint_summary(
     Returns:
         A :class:`matplotlib.figure.Figure`.
     """
-    fig, axes = plt.subplots(2, 2, figsize=(14, 8))
+    fig, axes = plt.subplots(2, 3, figsize=(18, 8))
     metrics: list[tuple[Axes, npt.NDArray[np.float64], str]] = [
-        (axes[0, 0], pos_err_vals, 'Position error (pixels)'),
-        (axes[0, 1], scale_err_vals, 'Relative scale error'),
-        (axes[1, 0], sigma_y_err_vals, 'Relative sigma_y error'),
-        (axes[1, 1], angle_err_vals, 'Angle error (radians)'),
+        (axes[0, 0], pos_err_vals,    'Position error, Euclidean (pixels)'),
+        (axes[0, 1], pos_err_y_vals,  '|pos_err_y| (pixels)'),
+        (axes[0, 2], pos_err_x_vals,  '|pos_err_x| (pixels)'),
+        (axes[1, 0], scale_err_vals,  'Relative scale error'),
+        (axes[1, 1], sigma_y_err_vals, 'Relative sigma_y error'),
+        (axes[1, 2], angle_err_vals,  'Angle error (radians)'),
     ]
 
     n_cat = len(categories)

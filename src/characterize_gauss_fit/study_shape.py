@@ -125,6 +125,8 @@ def _write_outputs(
     for sx_idx, sigma_x in enumerate(study.sigma_x_values):
         base_idx = sx_idx * trials_per_sigma_x
         pos_err_grid = np.full((n_ratios, n_angles), float('nan'))
+        pos_err_y_grid = np.full((n_ratios, n_angles), float('nan'))
+        pos_err_x_grid = np.full((n_ratios, n_angles), float('nan'))
         angle_err_grid = np.full((n_ratios, n_angles), float('nan'))
         sigma_y_err_grid = np.full((n_ratios, n_angles), float('nan'))
         fail_mask = np.zeros((n_ratios, n_angles), dtype=bool)
@@ -137,6 +139,8 @@ def _write_outputs(
                     fail_mask[r_idx, a_idx] = True
                     continue
                 pos_err_grid[r_idx, a_idx] = result.pos_err
+                pos_err_y_grid[r_idx, a_idx] = abs(result.pos_err_y)
+                pos_err_x_grid[r_idx, a_idx] = abs(result.pos_err_x)
                 if result.sigma_y_err is not None:
                     sigma_y_err_grid[r_idx, a_idx] = abs(result.sigma_y_err)
                 if not is_circular and result.angle_err is not None:
@@ -144,9 +148,16 @@ def _write_outputs(
 
         label = f'sigma_x={sigma_x:.1f}'
         for data, metric_title, fname_prefix, cbar in [
-            (pos_err_grid, f'Position error -- {label}', 'pos_err', 'log10(pos error)'),
-            (angle_err_grid, f'Angle error (rad) -- {label}', 'angle_err', 'Angle error (rad)'),
-            (sigma_y_err_grid, f'Rel sigma_y error -- {label}', 'sigma_y_err', 'log10(rel error)'),
+            (pos_err_grid,
+             f'Position error (Euclidean) -- {label}', 'pos_err',   'log10(pos error)'),
+            (pos_err_y_grid,
+             f'|pos_err_y| -- {label}',                'pos_err_y', 'log10(|pos_err_y|)'),
+            (pos_err_x_grid,
+             f'|pos_err_x| -- {label}',                'pos_err_x', 'log10(|pos_err_x|)'),
+            (angle_err_grid,
+             f'Angle error (rad) -- {label}',          'angle_err', 'Angle error (rad)'),
+            (sigma_y_err_grid,
+             f'Rel sigma_y error -- {label}',          'sigma_y_err', 'log10(rel error)'),
         ]:
             use_log = 'pos' in fname_prefix or 'sigma' in fname_prefix
             fig = plot_heatmap(

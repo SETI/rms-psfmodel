@@ -85,7 +85,7 @@ def _float_cell(value: float | None) -> str:
         return ''
     if math.isnan(value):
         return 'NaN'
-    return repr(value)
+    return repr(float(value))
 
 
 def _result_row(

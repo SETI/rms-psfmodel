@@ -164,6 +164,8 @@ def _write_outputs(
     for amp_idx, amplitude in enumerate(amplitudes):
         for ic_idx, ignore_center in enumerate(ignore_centers):
             grid = np.full((len(bkgnd_types), len(fit_degrees)), float('nan'))
+            grid_y = np.full((len(bkgnd_types), len(fit_degrees)), float('nan'))
+            grid_x = np.full((len(bkgnd_types), len(fit_degrees)), float('nan'))
             fail_mask = np.zeros_like(grid, dtype=bool)
 
             for bt_idx, bkgnd_type in enumerate(bkgnd_types):
@@ -181,25 +183,32 @@ def _write_outputs(
                                 fail_mask[bt_idx, fd_idx] = True
                             else:
                                 grid[bt_idx, fd_idx] = result.pos_err
+                                grid_y[bt_idx, fd_idx] = abs(result.pos_err_y)
+                                grid_x[bt_idx, fd_idx] = abs(result.pos_err_x)
                             break
 
             ic_str = f'{ignore_center[0]}x{ignore_center[1]}'
-            fig = plot_heatmap(
-                grid,
-                degree_labels,
-                type_labels,
-                title=f'Position error -- amp={amplitude:.2f}, ignore={ic_str}',
-                xlabel='Fitting bkgnd_degree',
-                ylabel='Injected background type',
-                cbar_label='log10(pos error)',
-                log_scale=True,
-                mask=fail_mask,
-            )
-            save_figure(
-                fig,
-                study_dir,
-                f'pos_err_amp{amp_idx}_ic{ic_idx}.png',
-            )
+            for hmap, metric_label, fsuffix in [
+                (grid,   'Position error (Euclidean)',  ''),
+                (grid_y, '|pos_err_y|',                '_y'),
+                (grid_x, '|pos_err_x|',                '_x'),
+            ]:
+                fig = plot_heatmap(
+                    hmap,
+                    degree_labels,
+                    type_labels,
+                    title=f'{metric_label} -- amp={amplitude:.2f}, ignore={ic_str}',
+                    xlabel='Fitting bkgnd_degree',
+                    ylabel='Injected background type',
+                    cbar_label='log10(pos error)',
+                    log_scale=True,
+                    mask=fail_mask,
+                )
+                save_figure(
+                    fig,
+                    study_dir,
+                    f'pos_err{fsuffix}_amp{amp_idx}_ic{ic_idx}.png',
+                )
 
     _ = n_amp
     _ = n_ic

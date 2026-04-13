@@ -269,9 +269,13 @@ def synthesize_image(spec: TrialSpec) -> tuple[npt.NDArray[np.float64], float, f
         image[rows, cols] += hot_amplitude
 
     # --- True position in full-image coordinates ---
+    # find_position returns positions in pixel-left-edge convention: the centre of
+    # pixel i is at coordinate i + 0.5 (pixel 0 spans [0, 1]).  Adding 0.5 to the
+    # integer centre index converts to this same convention so that error = 0 for
+    # a perfect fit.
     center = spec.box_size // 2
-    true_y = float(center) + spec.offset_y
-    true_x = float(center) + spec.offset_x
+    true_y = float(center) + 0.5 + spec.offset_y
+    true_x = float(center) + 0.5 + spec.offset_x
 
     return image.astype(np.float64), true_y, true_x
 

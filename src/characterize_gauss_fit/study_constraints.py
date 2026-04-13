@@ -220,6 +220,8 @@ def _write_outputs(
 
     # Build (n_modes, n_shapes) arrays for each metric.
     pos_err_vals = np.full((n_modes, n_shapes), float('nan'))
+    pos_err_y_vals = np.full((n_modes, n_shapes), float('nan'))
+    pos_err_x_vals = np.full((n_modes, n_shapes), float('nan'))
     scale_err_vals = np.full((n_modes, n_shapes), float('nan'))
     sigma_y_err_vals = np.full((n_modes, n_shapes), float('nan'))
     angle_err_vals = np.full((n_modes, n_shapes), float('nan'))
@@ -229,6 +231,8 @@ def _write_outputs(
             result = results[m_idx * n_shapes + s_idx]
             if result.converged:
                 pos_err_vals[m_idx, s_idx] = result.pos_err
+                pos_err_y_vals[m_idx, s_idx] = abs(result.pos_err_y)
+                pos_err_x_vals[m_idx, s_idx] = abs(result.pos_err_x)
                 if np.isfinite(result.scale_err):
                     scale_err_vals[m_idx, s_idx] = abs(result.scale_err)
                 if result.sigma_y_err is not None:
@@ -240,6 +244,8 @@ def _write_outputs(
         mode_labels,
         shape_labels,
         pos_err_vals,
+        pos_err_y_vals,
+        pos_err_x_vals,
         scale_err_vals,
         sigma_y_err_vals,
         angle_err_vals,

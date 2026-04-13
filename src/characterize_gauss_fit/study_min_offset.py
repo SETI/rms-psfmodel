@@ -173,41 +173,51 @@ def _write_outputs(
     delta_labels = [f'{d:.3g}' for d in deltas]
     sigma_labels = [f'{s:.2g}' for s in sigmas]
 
-    # Line plots: one per condition.
+    # Line plots: one per condition, three metrics (Euclidean, Y-axis, X-axis).
     for _noise_rms, cond_label in conditions:
-        y_means: list[npt.NDArray[np.float64]] = []
-        y_stds: list[npt.NDArray[np.float64]] = []
-        line_labels: list[str] = []
+        for metric_attr, metric_label, fname_prefix in [
+            ('pos_err',   'Mean position error (Euclidean, pixels)', 'pos_err'),
+            ('pos_err_y', 'Mean |pos_err_y| (pixels)',               'pos_err_y'),
+            ('pos_err_x', 'Mean |pos_err_x| (pixels)',               'pos_err_x'),
+        ]:
+            y_means: list[npt.NDArray[np.float64]] = []
+            y_stds: list[npt.NDArray[np.float64]] = []
+            line_labels: list[str] = []
 
-        for sigma in sigmas:
-            means_per_delta: list[float] = []
-            stds_per_delta: list[float] = []
-            for delta in deltas:
-                bucket = result_map[(delta, sigma, cond_label)]
-                errs = np.array([r.pos_err for r in bucket if r.converged], dtype=np.float64)
-                errs = errs[np.isfinite(errs)]
-                if len(errs) == 0:
-                    means_per_delta.append(float('nan'))
-                    stds_per_delta.append(float('nan'))
-                else:
-                    means_per_delta.append(float(np.mean(errs)))
-                    stds_per_delta.append(float(np.std(errs, ddof=1)) if len(errs) > 1 else 0.0)
-            y_means.append(np.array(means_per_delta))
-            y_stds.append(np.array(stds_per_delta))
-            line_labels.append(f'sigma={sigma:.2g}')
+            for sigma in sigmas:
+                means_per_delta: list[float] = []
+                stds_per_delta: list[float] = []
+                for delta in deltas:
+                    bucket = result_map[(delta, sigma, cond_label)]
+                    errs = np.array(
+                        [abs(float(getattr(r, metric_attr))) for r in bucket if r.converged],
+                        dtype=np.float64,
+                    )
+                    errs = errs[np.isfinite(errs)]
+                    if len(errs) == 0:
+                        means_per_delta.append(float('nan'))
+                        stds_per_delta.append(float('nan'))
+                    else:
+                        means_per_delta.append(float(np.mean(errs)))
+                        stds_per_delta.append(
+                            float(np.std(errs, ddof=1)) if len(errs) > 1 else 0.0
+                        )
+                y_means.append(np.array(means_per_delta))
+                y_stds.append(np.array(stds_per_delta))
+                line_labels.append(f'sigma={sigma:.2g}')
 
-        fig = plot_line_with_bands(
-            x_arr,
-            y_means,
-            y_stds,
-            labels=line_labels,
-            title=f'Min detectable offset -- {cond_label}',
-            xlabel='Injected offset delta (pixels)',
-            ylabel='Mean position error (pixels)',
-            log_x=True,
-            log_y=True,
-        )
-        save_figure(fig, study_dir, f'pos_err_{cond_label}.png')
+            fig = plot_line_with_bands(
+                x_arr,
+                y_means,
+                y_stds,
+                labels=line_labels,
+                title=f'Min detectable offset -- {cond_label}',
+                xlabel='Injected offset delta (pixels)',
+                ylabel=metric_label,
+                log_x=True,
+                log_y=True,
+            )
+            save_figure(fig, study_dir, f'{fname_prefix}_{cond_label}.png')
 
     # Recovery fraction heatmap: one per SNR condition (skip noiseless).
     for noise_rms, cond_label in conditions:

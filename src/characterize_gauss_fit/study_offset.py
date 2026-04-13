@@ -113,11 +113,13 @@ def _write_outputs(
 
     offset_labels = [f'{v:.2f}' for v in offsets]
 
-    # Heatmaps: one per sigma value.
+    # Heatmaps: one set per sigma value — Euclidean error plus Y and X axes.
     step = n_off * n_off  # trials per sigma
     for s_idx, sigma in enumerate(sigmas):
         slice_results = results[s_idx * step : (s_idx + 1) * step]
         grid = np.full((n_off, n_off), float('nan'))
+        grid_y = np.full((n_off, n_off), float('nan'))
+        grid_x = np.full((n_off, n_off), float('nan'))
         fail_mask = np.zeros((n_off, n_off), dtype=bool)
         for oy_idx in range(n_off):
             for ox_idx in range(n_off):
@@ -126,51 +128,73 @@ def _write_outputs(
                     fail_mask[oy_idx, ox_idx] = True
                 else:
                     grid[oy_idx, ox_idx] = r.pos_err
+                    grid_y[oy_idx, ox_idx] = abs(r.pos_err_y)
+                    grid_x[oy_idx, ox_idx] = abs(r.pos_err_x)
 
-        fig = plot_heatmap(
-            grid,
-            offset_labels,
-            offset_labels,
-            title=f'Position error vs. offset (sigma={sigma:.1f})',
-            xlabel='offset_x (pixels)',
-            ylabel='offset_y (pixels)',
-            cbar_label='log10(pos error)',
-            log_scale=True,
-            mask=fail_mask,
-        )
-        save_figure(fig, study_dir, f'pos_err_sigma{sigma:.1f}.png')
+        for hmap, metric_label, fname in [
+            (grid,   'Position error (Euclidean)',   f'pos_err_sigma{sigma:.1f}.png'),
+            (grid_y, '|pos_err_y|',                 f'pos_err_y_sigma{sigma:.1f}.png'),
+            (grid_x, '|pos_err_x|',                 f'pos_err_x_sigma{sigma:.1f}.png'),
+        ]:
+            fig = plot_heatmap(
+                hmap,
+                offset_labels,
+                offset_labels,
+                title=f'{metric_label} vs. offset (sigma={sigma:.1f})',
+                xlabel='offset_x (pixels)',
+                ylabel='offset_y (pixels)',
+                cbar_label='log10(error)',
+                log_scale=True,
+                mask=fail_mask,
+            )
+            save_figure(fig, study_dir, fname)
 
-    # Line plot: pos error vs offset_x at offset_y=0.25 for all sigmas.
-    # Use the midpoint of the offset range as the fixed offset_y row.
-    mid_oy_idx = n_off // 2
+    # Line plots: error vs offset_x at fixed offset_y (midpoint row), and
+    # error vs offset_y at fixed offset_x (midpoint column).
+    mid_idx = n_off // 2
     x_arr = np.array(offsets)
-    y_means: list[npt.NDArray[np.float64]] = []
-    y_stds: list[npt.NDArray[np.float64]] = []
-    line_labels: list[str] = []
 
-    for s_idx, sigma in enumerate(sigmas):
-        slice_results = results[s_idx * step : (s_idx + 1) * step]
-        row: list[float] = []
-        for ox_idx in range(n_off):
-            r = slice_results[mid_oy_idx * n_off + ox_idx]
-            row.append(r.pos_err if r.converged else float('nan'))
-        arr = np.array(row, dtype=np.float64)
-        y_means.append(arr)
-        y_stds.append(np.zeros_like(arr))  # single trial; no std
-        line_labels.append(f'sigma={sigma:.1f}')
+    for metric_attr, metric_label, vary_axis in [
+        ('pos_err',   'Position error (Euclidean, pixels)', 'offset_x'),
+        ('pos_err_y', '|pos_err_y| (pixels)',               'offset_x'),
+        ('pos_err_x', '|pos_err_x| (pixels)',               'offset_x'),
+        ('pos_err',   'Position error (Euclidean, pixels)', 'offset_y'),
+        ('pos_err_y', '|pos_err_y| (pixels)',               'offset_y'),
+        ('pos_err_x', '|pos_err_x| (pixels)',               'offset_y'),
+    ]:
+        y_means: list[npt.NDArray[np.float64]] = []
+        y_stds: list[npt.NDArray[np.float64]] = []
+        line_labels: list[str] = []
 
-    mid_oy = offsets[mid_oy_idx]
-    fig = plot_line_with_bands(
-        x_arr,
-        y_means,
-        y_stds,
-        labels=line_labels,
-        title=f'Position error vs. offset_x at offset_y={mid_oy:.2f}',
-        xlabel='offset_x (pixels)',
-        ylabel='Position error (pixels)',
-        log_y=True,
-    )
-    save_figure(fig, study_dir, 'pos_err_vs_offset_x.png')
+        for s_idx, sigma in enumerate(sigmas):
+            slice_results = results[s_idx * step : (s_idx + 1) * step]
+            row: list[float] = []
+            for idx in range(n_off):
+                if vary_axis == 'offset_x':
+                    r = slice_results[mid_idx * n_off + idx]
+                else:
+                    r = slice_results[idx * n_off + mid_idx]
+                val = getattr(r, metric_attr) if r.converged else float('nan')
+                row.append(abs(float(val)) if val is not None else float('nan'))
+            y_means.append(np.array(row, dtype=np.float64))
+            y_stds.append(np.zeros(n_off, dtype=np.float64))
+            line_labels.append(f'sigma={sigma:.1f}')
+
+        fixed_val = offsets[mid_idx]
+        fixed_axis = 'offset_y' if vary_axis == 'offset_x' else 'offset_x'
+        safe_metric = metric_attr.replace('_', '')
+        fname_line = f'{safe_metric}_vs_{vary_axis}.png'
+        fig = plot_line_with_bands(
+            x_arr,
+            y_means,
+            y_stds,
+            labels=line_labels,
+            title=f'{metric_label} vs. {vary_axis} at {fixed_axis}={fixed_val:.2f}',
+            xlabel=f'{vary_axis} (pixels)',
+            ylabel=metric_label,
+            log_y=True,
+        )
+        save_figure(fig, study_dir, fname_line)
 
     write_csv(cfg.output_dir, _STUDY_NAME, specs, results)
 
