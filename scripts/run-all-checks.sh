@@ -42,12 +42,12 @@
 #   enable more tools in a given repo. Each check runs only if both RUN_* and
 #   ENABLE_* are true (RUN_* from CLI or defaults below; ENABLE_* from env):
 #     ENABLE_RUFF_CHECK   (default: true)
-#     ENABLE_RUFF_FORMAT  (default: false)
-#     ENABLE_MYPY         (default: false)
+#     ENABLE_RUFF_FORMAT  (default: true) [modified from original]
+#     ENABLE_MYPY         (default: true) [modified from original]
 #     ENABLE_PYTEST       (default: true)
 #     ENABLE_PYROMA       (default: true)
-#     ENABLE_BANDIT       (default: false)
-#     ENABLE_VULTURE      (default: false)
+#     ENABLE_BANDIT       (default: true) [modified from original]
+#     ENABLE_VULTURE      (default: true) [modified from original]
 #     ENABLE_SPHINX       (default: true)
 #     ENABLE_PYMARKDOWN   PyMarkdown scan (default: true)
 #
@@ -299,7 +299,7 @@ fi
 
 START_TIME=$(date +%s)
 
-print_header "REPONAME - Running All Checks"
+print_header "rms-psfmodel - Running All Checks"
 
 if [ "$PARALLEL" = true ]; then
     print_info "Running checks in PARALLEL mode"

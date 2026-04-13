@@ -8,11 +8,11 @@
 import importlib.metadata
 import os
 import sys
+import warnings
 sys.path.insert(0, os.path.abspath('../src'))
 
 # Verify the source path exists
 if not os.path.exists(os.path.abspath('../src')):
-    import warnings
     warnings.warn("Source directory '../src' not found. API documentation may be incomplete.")
 
 # -- Project information -----------------------------------------------------

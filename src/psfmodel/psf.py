@@ -18,9 +18,64 @@ try:
 except ImportError:  # pragma: no cover
     __version__ = 'Version unspecified'
 
+# Unbounded ends for the additive PSF ``base`` in :meth:`PSF._find_position` when
+# ``allow_nonzero_base`` is True and ``use_angular_params`` is False (Powell box
+# constraints).
+_FIT_PSF_BASE_BOUND_MIN = float('-inf')
+_FIT_PSF_BASE_BOUND_MAX = float('inf')
+
 
 class PSF(ABC):
-    """Abstract superclass for classes that model different types of PSFs."""
+    """Abstract base for 2-D point-spread models used in fitting and rendering.
+
+    Subclass :class:`PSF` to provide a concrete model. The base class supplies shared
+    utilities (for example :meth:`find_position`, background helpers, and motion smear
+    via :meth:`_eval_rect_smeared`); evaluation itself is defined by subclasses through
+    the abstract API below.
+
+    **Abstract methods (must implement)**
+
+        * :meth:`eval_point` -- Evaluate the continuous PSF at fractional ``(y, x)``
+          (scalar or broadcast arrays). Signature includes keyword-only ``scale`` and
+          ``base``. Returns a float or a :class:`numpy.ndarray` of floats matching the
+          broadcast shape of ``coord``. Origin ``(0, 0)`` is the PSF center; coordinates
+          may be negative. Subclasses may add keyword-only parameters.
+
+        * :meth:`eval_rect` -- Build a rectangular, pixel-integrated patch. Signature:
+          ``rect_size``, ``offset``, then keyword-only ``movement``,
+          ``movement_granularity``, ``scale``, ``base``, and subclass-specific
+          ``**kwargs``. Must return :class:`numpy.ndarray` with ``dtype`` ``float64`` and
+          shape ``(height, width)`` matching ``rect_size`` as ``(size_y, size_x)``. Should
+          validate inputs (for example odd ``rect_size``) and raise :exc:`ValueError` for
+          invalid arguments with a clear message.
+
+        * :meth:`_eval_rect` -- Internal hook for the same patch without the checks in
+          :meth:`eval_rect`; same core keyword-only ``scale`` and ``base``. Must return a
+          ``float64`` array of shape ``(height, width)``. Subclasses often add
+          keyword-only model parameters. Callers must pass consistent arguments;
+          implementations may omit validation.
+
+    **Protected attributes**
+
+        * ``_logger`` -- :class:`logging.Logger` for this instance (set in
+          :meth:`__init__`). Subclasses log warnings and diagnostics through it.
+
+        * ``_additional_params`` -- :class:`list` (initialized empty), each entry a
+          ``(lower_bound, upper_bound, name)`` tuple of two floats and a :class:`str`
+          keyword name. Used by :meth:`find_position` / :meth:`_find_position` to append
+          extra optimized parameters (bounds and :meth:`eval_rect` keyword). Subclasses
+          append one tuple per fittable quantity in construction order; leave the list
+          empty if there are no extra parameters (for example fixed-width models).
+
+    **Errors and return conventions**
+
+        Public evaluators should reject bad arguments with :exc:`ValueError` (or
+        :exc:`TypeError` for wrong types) where feasible. Some higher-level routines
+        (notably :meth:`find_position`) signal failure by returning ``None`` instead of
+        raising. Numeric outputs are real floating point; ``scale`` multiplies the model
+        amplitude and ``base`` adds a constant offset in the same units as the evaluated
+        PSF values unless a subclass documents physical units.
+    """
 
     def __init__(
         self,
@@ -150,7 +205,30 @@ class PSF(ABC):
         scale: float = 1.0,
         base: float = 0.0,
     ) -> npt.NDArray[np.float64]:
-        """Internal function to create a rectangular pixelated PSF without other checks."""
+        """Pixel-integrated rectangular PSF; internal counterpart to :meth:`eval_rect`.
+
+        Used by :meth:`_eval_rect_smeared` and subclass implementations. Unlike
+        :meth:`eval_rect`, this hook performs no input validation, bounds checking, or
+        clipping; callers must supply consistent arguments.
+
+        Parameters:
+            rect_size: ``(height, width)`` in pixels, i.e. ``(size_y, size_x)`` (row and
+                column counts). This matches the shape of the returned array.
+            offset: ``(offset_y, offset_x)`` subpixel shift of the PSF reference in
+                fractional pixel coordinates. Default ``(0.5, 0.5)`` centers the model in
+                the middle pixel; ``(0.0, 0.0)`` uses the top-left corner of that pixel
+                as the reference (same convention as :meth:`eval_rect`).
+            scale: Multiplier applied to the PSF amplitude before ``base`` is added.
+            base: Additive baseline added to every output pixel after ``scale``.
+
+        Returns:
+            A :class:`numpy.ndarray` of dtype ``float64`` with shape ``(height, width)``
+            containing the rectangular, pixel-sampled PSF.
+
+        Note:
+            Concrete subclasses may add keyword-only parameters for model-specific
+            quantities (for example width or angle on a Gaussian).
+        """
         ...  # pragma: no cover
 
     def _eval_rect_smeared(
@@ -167,14 +245,14 @@ class PSF(ABC):
         """Evaluate and sum a PSF multiple times to simulate motion blur.
 
         Parameters:
-            movement: The total amount (my, mx) the PSF moves. The movement is assumed to
-                be centered on the given offset and exists half on either side.
-            movement_granularity: The number of pixels to step for each smear while doing
-                motion blur.
             rect_size: The size of the rectangle (rect_size_y, rect_size_x) of the
                 returned PSF. Both dimensions must be odd.
             offset: The amount (offset_y, offset_x) to offset the center of the PSF. A
                 positive offset effectively moves the PSF down and to the left. XXX
+            movement: The total amount (my, mx) the PSF moves. The movement is assumed to
+                be centered on the given offset and exists half on either side.
+            movement_granularity: The number of pixels to step for each smear while doing
+                motion blur.
             scale: A scale factor to apply to the resulting PSF.
             base: A scalar added to the resulting PSF.
 
@@ -297,8 +375,11 @@ class PSF(ABC):
             ignore_center: A scalar or tuple (ignore_y, ignore_x) giving the number of
                 pixels on either side of the center to ignore while fitting. 0 means
                 ignore the center pixel. None means don't ignore anything.
-            num_sigma: The number of sigma a pixel needs to be beyond the background
-                gradient to be ignored. None means don't ignore bad pixels.
+            num_sigma: Outlier rejection uses the fit residual ``image - gradient``:
+                unmasked pixels with absolute residual at least ``num_sigma`` times the
+                standard deviation of that residual (mask-aware) are masked and the fit
+                is repeated. None disables this. Non-positive values disable masking
+                after the initial least-squares fit.
             debug: Set to debug bad pixel removal.
             logger: Logger for debug messages; defaults to this module's logger.
 
@@ -385,17 +466,28 @@ class PSF(ABC):
 
             if num_sigma is None:
                 break
+            num_sigma_f = float(num_sigma)
+            if num_sigma_f <= 0:
+                break
 
-            # TODO - BITO suggests:
-            # worst_sigma = np.max(np.abs(delta_img))
-            # if worst_sigma >= sigma*num_sigma:
-            #     image[np.abs(delta_img) >= sigma*num_sigma] = ma.masked
             gradient = PSF.background_gradient(shape, coeffts)
             delta_img = image - gradient
-            sigma = np.std(delta_img)
-            worst_sigma = np.max(np.abs(delta_img))
-            if worst_sigma >= sigma * num_sigma:
-                image[np.abs(delta_img) >= worst_sigma] = ma.masked
+            sigma = ma.std(delta_img)
+            if ma.is_masked(sigma):
+                break
+            sigma_f = float(sigma)
+            if not np.isfinite(sigma_f) or sigma_f <= 0:
+                break
+            threshold = num_sigma_f * sigma_f
+            if debug:  # pragma: no cover
+                fit_logger.debug(
+                    'Background gradient fit: residual std=%s max_abs=%s threshold=%s',
+                    sigma_f,
+                    float(ma.max(ma.abs(delta_img))),
+                    threshold,
+                )
+            outlier_mask = ma.filled(ma.abs(delta_img) >= threshold, False)
+            image[outlier_mask] = ma.masked
 
             new_num_bad_pixels = cast(int, ma.count_masked(image))  # type: ignore
             if debug:  # pragma: no cover
@@ -418,10 +510,15 @@ class PSF(ABC):
         """Create a background gradient.
 
         Parameters:
-            size: A tuple (size_y, size_x) indicating the size of the returned array.
-            bkgnd_params: A tuple indicating the coefficients of the background
-                polynomial. The order of the polynomial is inferred from the number of
-                elements in the tuple.
+            rect_size: ``(size_y, size_x)``, the shape of the output grid (height, width)
+                in pixels; must match the image shape used when the coefficients were fit.
+            bkgnd_params: Coefficients of the background polynomial (1-D array-like). The
+                polynomial order is inferred from the number of elements.
+
+        Returns:
+            A :class:`numpy.ndarray` of ``dtype`` ``float64`` with shape ``rect_size``
+            (i.e. ``(size_y, size_x)``): the evaluated 2-D background polynomial at each
+            pixel center of the grid.
         """
 
         bkgnd_params = np.array(bkgnd_params)
@@ -681,6 +778,33 @@ class PSF(ABC):
         use_angular_params: bool,
         *additional_params: Any,
     ) -> float:
+        """Scalar objective for PSF fitting; minimized in :meth:`_find_position`.
+
+        Evaluates :meth:`eval_rect` at the candidate parameters, subtracts the model from
+        ``sub_img``, and returns the Euclidean norm of the flattened residual (root sum
+        of squared differences).
+
+        Parameters:
+            params: Optimizer vector: offset(s), scale, optional ``base`` (if
+                ``allow_nonzero_base``), then one value per extra PSF parameter. Meaning
+                depends on ``use_angular_params`` (angles vs direct values); see the
+                implementation.
+            sub_img: 2-D patch (same shape as the PSF grid); background should already be
+                subtracted by the caller when applicable.
+            search_limit: ``(limit_y, limit_x)`` centroid search half-ranges in pixels,
+                used when mapping ``params`` to offsets (see ``use_angular_params``).
+            scale_limit: Upper bound on PSF ``scale`` for :meth:`eval_rect`.
+            allow_nonzero_base: If ``True``, ``params`` includes a fitted constant
+                ``base`` passed to :meth:`eval_rect`; if ``False``, ``base`` is zero.
+            use_angular_params: If ``True``, map bounded angles to offsets, scale, extras,
+                and optional ``base``; if ``False``, ``params`` are physical values within
+                bounds set by the caller.
+            additional_params: Zero or more ``(lo, hi, name)`` tuples giving bounds and
+                keyword names for subclass-specific :meth:`eval_rect` arguments.
+
+        Returns:
+            Non-negative float cost (lower is better).
+        """
 
         # Make an offset of "0" be the center of the pixel (0.5, 0.5)
         if use_angular_params:
@@ -758,6 +882,81 @@ class PSF(ABC):
         allow_nonzero_base: bool,
         use_angular_params: bool,
     ) -> None | tuple[float, float, dict[str, Any]]:
+        """Fit PSF position and shape on a fixed subimage via bounded Powell optimization.
+
+        This is the inner numerical core for :meth:`find_position`: it subtracts an
+        optional polynomial background, then runs :func:`scipy.optimize.minimize` (Powell)
+        on the scalar objective from :meth:`_fit_psf_func` (root-sum-square residual
+        between data and model).
+
+        Parameters:
+            sub_img: Cropped 2-D image (float), same shape as the PSF evaluation patch.
+                May be a :class:`numpy.ma.MaskedArray`; the background fit omits masked
+                pixels, and masked entries do not contribute to the scalar objective in
+                :meth:`_fit_psf_func` (masked squared residuals are excluded from the
+                sum).
+            search_limit: ``(limit_y, limit_x)`` maximum search half-range for subpixel
+                offsets, in **pixels**, relative to the subimage. With
+                ``use_angular_params`` True, offsets map from bounded angles via cosine
+                (see implementation); with False, ``offset_*`` are bounded directly by
+                these limits.
+            scale_limit: Upper bound on PSF ``scale`` passed to :meth:`eval_rect` (same
+                units as that method). The lower bound is a small positive value enforced
+                inside :meth:`_fit_psf_func`.
+            bkgnd_degree: If ``None``, no background is fit and ``gradient`` is all zeros.
+                If an int, polynomial order for :meth:`background_gradient_fit` on
+                ``sub_img`` before PSF optimization.
+            bkgnd_ignore_center: ``(ny, nx)`` passed to :meth:`background_gradient_fit` as
+                ``ignore_center``: a centered block of size ``(2*ny+1, 2*nx+1)`` is masked
+                out of the background fit. Ignored when ``bkgnd_degree`` is ``None``.
+            bkgnd_num_sigma: Optional outlier rejection for the background fit (sigma
+                threshold); ``None`` disables. Only used when ``bkgnd_degree`` is not
+                ``None``.
+            tolerance: Passed to :func:`scipy.optimize.minimize` as ``tol`` (Powell
+                stopping tolerance for both parameter and objective changes, per SciPy).
+            allow_nonzero_base: If ``True``, the PSF constant ``base`` in
+                :meth:`eval_rect` is a free parameter; if ``False``, ``base`` is fixed at
+                zero and only amplitude scaling applies.
+            use_angular_params: If ``True``, optimize offsets, scale, optional base, and
+                additional parameters via angles in ``[0, pi]`` so box constraints map to
+                physical ranges. If ``False``, use direct bounded parameters (offsets
+                within ``search_limit``, etc.).
+
+        Returns:
+            ``None`` if the background fit fails (:meth:`background_gradient_fit` returns
+            ``None``) or if the optimizer reports failure (``success`` is False).
+
+            Otherwise ``(offset_y, offset_x, details)``: subpixel offsets within the
+            subimage in pixel units (**y first, then x**), matching ``details['y']`` and
+            ``details['x']``. The caller adds integer slice origins to map to full-image
+            coordinates.
+
+            ``details`` is a :class:`dict` that always includes at least:
+
+            - ``'y'``, ``'x'``: fitted offsets (float).
+            - ``'scale'``, ``'base'``: fitted PSF scale and baseline.
+            - ``'subimg'``: reference to the input ``sub_img``.
+            - ``'bkgnd_params'``: 1-D coefficient array from the background fit, or
+              ``None`` if ``bkgnd_degree`` was ``None``.
+            - ``'bkgnd_mask'``: boolean mask from background fitting, or ``None`` if no
+              background fit.
+            - ``'gradient'``: evaluated background surface (zeros if no background fit).
+            - ``'subimg-gradient'``: ``sub_img - gradient`` (used for residuals).
+            - ``'psf'``, ``'scaled_psf'``: model patch from :meth:`eval_rect` at the
+              solution; identical arrays (``scaled_psf`` supports comparison to
+              ``subimg-gradient`` in the outer :meth:`find_position` loop).
+
+            Subclasses append one entry per additional PSF parameter (for example
+            ``'sigma_y'`` and ``'sigma_x'`` for :class:`~psfmodel.gaussian.GaussianPSF`),
+            using the internal names from ``_additional_params``.
+
+        Note:
+            Optimizer ``status``, ``message``, and the final objective value are not
+            stored in ``details``; with instance ``detailed_logging`` they may appear in
+            DEBUG logs. Uncertainty keys (``'x_err'``, etc.) and least-squares metadata
+            described on :meth:`find_position` are not populated by the current
+            implementation.
+        """
 
         bkgnd_params = None
         bkgnd_mask = None
@@ -797,7 +996,7 @@ class PSF(ABC):
             ]
             starting_guess = [0.001, 0.001, scale_limit / 2]
             if allow_nonzero_base:
-                bounds += [(-1e38, 1e38)]
+                bounds += [(_FIT_PSF_BASE_BOUND_MIN, _FIT_PSF_BASE_BOUND_MAX)]
                 starting_guess += [0.001]
             for a_min, a_max, _a_name in self._additional_params:
                 bounds += [(a_min, a_max)]
@@ -949,7 +1148,7 @@ class PSF(ABC):
             if bkgnd_mask is not None:
                 self._logger.debug(
                     '_find_position: bkgnd_mask bad pixels=%s',
-                    int(np.sum(ma.getmaskarray(bkgnd_mask))),
+                    int(np.sum(bkgnd_mask)),
                 )
             self._logger.debug('_find_position: PSF scale=%s base=%s', scale, base)
             for key in addl_vals_dict:

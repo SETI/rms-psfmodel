@@ -160,9 +160,7 @@ def test_gaussian_integral_1d() -> None:
 
     g_0_1 = integrate.quad(GaussianPSF.gaussian_1d, 0.0, 1.0)[0]
     g_n1_1 = integrate.quad(GaussianPSF.gaussian_1d, -1.0, 1.0)[0]
-    assert GaussianPSF.gaussian_integral_1d(0.0, 1.0) == pytest.approx(
-        integrate.quad(GaussianPSF.gaussian_1d, 0.0, 1.0)[0]
-    )
+    assert GaussianPSF.gaussian_integral_1d(0.0, 1.0) == pytest.approx(g_0_1)
     assert GaussianPSF.gaussian_integral_1d(-1.0, 1.0) == pytest.approx(g_n1_1)
     assert GaussianPSF.gaussian_integral_1d(-1.0, 1.0, mean=2.0) == pytest.approx(
         integrate.quad(GaussianPSF.gaussian_1d, 1.0, 3.0)[0]
@@ -384,6 +382,14 @@ def test_gaussian_init_angle_subsample_rejects_non_int() -> None:
     with pytest.raises(ValueError) as exc_info:
         GaussianPSF(angle_subsample=1.5)  # type: ignore[arg-type]
     assert str(exc_info.value) == 'angle_subsample must be an int between 1 and 99, got 1.5'
+
+
+def test_gaussian_init_angle_none_registers_floating_angle() -> None:
+    """Passing ``angle=None`` leaves rotation unset and adds it to the fit parameter list."""
+
+    psf = GaussianPSF(sigma=(1.0, 1.0), angle=None, angle_subsample=3)
+    assert psf._angle is None
+    assert ('angle',) in {(t[2],) for t in psf._additional_params}
 
 
 @pytest.mark.parametrize('use_angular_params', [True, False])

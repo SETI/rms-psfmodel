@@ -26,7 +26,7 @@ labels: bug
 <!-- Or provide a minimal code snippet: -->
 
 ```python
-import rms-psfmodel
+import psfmodel
 # minimal reproduction here
 ```
 

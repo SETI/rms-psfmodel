@@ -49,6 +49,8 @@ pip install rms-psfmodel
 
 Details of each class are available in the [module documentation](https://rms-psfmodel.readthedocs.io/en/latest/module.html).
 
+After installation, an optional Tkinter-based PSF explorer is available as the `psf-gui` command (or `python -m psf_gui` with `src` on `PYTHONPATH`). It requires a working Tcl/Tk (for example the `python3-tk` package on Debian/Ubuntu).
+
 # Contributing
 
 Information on contributing to this package can be found in the

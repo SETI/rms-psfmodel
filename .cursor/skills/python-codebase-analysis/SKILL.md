@@ -38,7 +38,7 @@ Compare against project rules when present (e.g. `.cursor/rules/python_best_prac
 - Error handling: narrow try/except; no bare except; logging over print in libraries.
 - Public API: clear `__all__`, `py.typed` for typed packages, separation of public vs `_private`.
 - Library hygiene: use `logging.getLogger(__name__)`, never configure the root logger, set `NullHandler` in top-level `__init__.py`. No `print()` in library code (only in explicit CLI entry points). No `sys.exit()` in library code; raise exceptions instead.
-- Error message quality: exceptions include enough context to diagnose (`ValueError("x must be positive, got -3")` not `ValueError("bad value")`). Custom base exception class (e.g. `class rms-psfmodelError(Exception)`) so callers can catch library errors specifically. Appropriate use of `warnings.warn()` with `DeprecationWarning`/`FutureWarning` for planned changes.
+- Error message quality: exceptions include enough context to diagnose (`ValueError("x must be positive, got -3")` not `ValueError("bad value")`). Custom base exception class (e.g. `class psfmodelError(Exception)`) so callers can catch library errors specifically. Appropriate use of `warnings.warn()` with `DeprecationWarning`/`FutureWarning` for planned changes.
 - Encoding and I/O: explicit `encoding='utf-8'` on `open()` calls (platform default varies). Consistent use of `pathlib.Path` over `os.path` string manipulation. Accept `str | Path` in public API. Context managers for all files and connections.
 
 **Evidence**: Rule name or quote, example file:line or pattern. Grep for `print(`, `sys.exit`, `sys.stdout`, `open(` without `encoding=`, `logging.basicConfig` in non-CLI code.

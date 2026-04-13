@@ -39,9 +39,12 @@ Closes #<!-- issue number -->
 
 - [ ] Code follows project style (`ruff check`, `ruff format`)
 - [ ] Type annotations present and `mypy` passes
+- [ ] No secrets or credentials committed
+- [ ] No warnings or errors introduced (CI, linters, type checking, builds) or justified in Notes
 - [ ] Docstrings and Sphinx docs updated (if applicable)
 - [ ] CHANGES.md updated (if user-facing change)
 - [ ] No temporary or debug code left in
+- [ ] Performance impact assessed (see Potential Impacts above)
 - [ ] Breaking changes flagged in Type of Change above
 
 ## Notes

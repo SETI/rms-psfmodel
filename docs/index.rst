@@ -1,4 +1,4 @@
-.. RMS-XXX documentation master file
+.. rms-psfmodel documentation master file
 
 Welcome to the Documentation for rms-psfmodel!
 ==============================================

@@ -14,7 +14,7 @@ labels: enhancement
 
 ```python
 # Example usage
-result = rms-psfmodel.new_function(arg)
+result = psfmodel.new_function(arg)
 ```
 
 ## Alternatives Considered

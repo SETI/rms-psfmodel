@@ -92,7 +92,7 @@ docs = [
 ]
 
 [project.scripts]
-#TODO = "main.psfmodel:main"
+psf-gui = "psf_gui.main:main"
 
 # Tool configuration
 
@@ -100,7 +100,7 @@ docs = [
 branch = true
 parallel = true
 source = ["psfmodel"]
-omit = ["tests/*", "**/_version.py", "**/psfmodel/hst.py"]
+omit = ["tests/*", "**/_version.py", "**/psfmodel/hst.py", "**/psf_gui/**"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -116,7 +116,6 @@ exclude = ["src/psfmodel/hst.py"]
 
 [tool.mypy]
 strict = true
-disallow_subclassing_any = false
 exclude = [
   "src/psfmodel/hst\\.py",
 ]
@@ -133,16 +132,9 @@ ignore_missing_imports = true
 module = "scipy.*"
 ignore_missing_imports = true
 
-[[tool.mypy.overrides]]
-module = [
-  "conftest",
-  "test_find_position",
-  "test_gaussian",
-  "test_psf",
-]
-check_untyped_defs = false
-disallow_untyped_defs = false
-strict = false
+#[[tool.mypy.overrides]]
+# module = ["MODULENAME.*"]
+# ignore_missing_imports = true
 
 [tool.ruff]
 target-version = "py310"

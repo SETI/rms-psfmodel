@@ -2,6 +2,14 @@
 # psfmodel/gaussian.py
 ################################################################################
 
+"""Analytic Gaussian PSF models and integrals for :class:`~psfmodel.psf.PSF`.
+
+:class:`GaussianPSF` subclasses :class:`~psfmodel.psf.PSF` for pixel-integrated fitting
+and rendering. The module exposes helpers such as :class:`GaussianPSF` and the constant
+``INV_SQRT_2`` (used in error-function integrals). Depends on NumPy and
+``scipy.special.erf``.
+"""
+
 import logging
 from typing import cast
 
@@ -25,12 +33,19 @@ class GaussianPSF(PSF):
     Because these are so fast and easy to compute, we don't cache any results.
     """
 
+    _sigma_y: float | None
+    _sigma_x: float | None
+    _mean_y: float
+    _mean_x: float
+    _angle: float | None
+    _angle_subsample: int
+
     def __init__(
         self,
         *,
         sigma: float | tuple[float | None, float | None] | None = None,
         mean: float | tuple[float, float] = 0.0,
-        angle: float = 0.0,
+        angle: float | None = 0.0,
         sigma_x_range: tuple[float, float] = (0.01, 10.0),
         sigma_y_range: tuple[float, float] = (0.01, 10.0),
         angle_subsample: int = 13,
@@ -46,9 +61,11 @@ class GaussianPSF(PSF):
                 sigma will be supplied later.
             mean: The mean of the Gaussian. May be a scalar in which case the value
                 applies to both X and Y, or a tuple (mean_y, mean_x).
-            angle: The angle of the Gaussian. angle ranges from 0 to pi, with 0 being
-                "3 o'clock" (+X) assuming that (0, 0) is in the top left corner. None
-                means that the angle will be supplied later.
+            angle: Rotation angle from 0 to ``pi`` (0 is +X). Default ``0.0`` fixes an
+                unrotated Gaussian and keeps pixel integration on the fast axis-aligned
+                path. Pass ``None`` to include ``angle`` in ``_additional_params`` so it
+                can be fitted in :meth:`~psfmodel.psf.PSF.find_position`; per-call
+                overrides are still accepted by :meth:`eval_rect`.
             sigma_x_range: The valid range for sigma_x if it is not specified otherwise.
                 This is used during PSF fitting to let sigma_x float to its optimal value.
             sigma_y_range: The valid range for sigma_y if it is not specified otherwise.
@@ -61,7 +78,7 @@ class GaussianPSF(PSF):
 
         super().__init__(logger=logger, detailed_logging=detailed_logging)
 
-        if not isinstance(sigma, (tuple, list)):
+        if not isinstance(sigma, tuple):
             self._sigma_y = self._sigma_x = float(sigma) if sigma is not None else None
         else:
             self._sigma_y = float(sigma[0]) if sigma[0] is not None else None
@@ -70,7 +87,7 @@ class GaussianPSF(PSF):
             self._mean_y = self._mean_x = float(mean)
         else:
             self._mean_y, self._mean_x = float(mean[0]), float(mean[1])
-        self._angle = float(angle)
+        self._angle = None if angle is None else float(angle)
         if not isinstance(angle_subsample, int) or not (0 < angle_subsample <= 99):
             raise ValueError(
                 f'angle_subsample must be an int between 1 and 99, got {angle_subsample}'
@@ -90,18 +107,40 @@ class GaussianPSF(PSF):
 
     @property
     def sigma_y(self) -> float | None:
+        """Standard deviation of the Gaussian along the y-axis (pixels), if fixed.
+
+        Returns:
+            The locked ``sigma_y`` from construction, or ``None`` when it is left free
+            for fitting or per-call overrides.
+        """
         return self._sigma_y
 
     @property
     def sigma_x(self) -> float | None:
+        """Standard deviation of the Gaussian along the x-axis (pixels), if fixed.
+
+        Returns:
+            The locked ``sigma_x`` from construction, or ``None`` when it is left free
+            for fitting or per-call overrides.
+        """
         return self._sigma_x
 
     @property
     def mean_y(self) -> float:
+        """Center of the Gaussian along the y-axis in pixel coordinates.
+
+        Returns:
+            The mean ``y`` used when evaluating the model (scalar).
+        """
         return self._mean_y
 
     @property
     def mean_x(self) -> float:
+        """Center of the Gaussian along the x-axis in pixel coordinates.
+
+        Returns:
+            The mean ``x`` used when evaluating the model (scalar).
+        """
         return self._mean_x
 
     @staticmethod
@@ -257,23 +296,23 @@ class GaussianPSF(PSF):
         The integral is over the limits [xmin, xmax].
 
         Values are generated via the error function, where the integral from
-        -inf to x is equal to
+        ``-inf`` to ``x`` is proportional to
 
-               (1 + erf((x - mean_x) / (sqrt(2)*sigma_x)) / 2
+            ``1 + erf((x - mean) / (sqrt(2) * sigma))``
 
         This function works for both scalar and array values of xmin and xmax.
 
         Parameters:
             x_min: The lower bound of the integral.
             x_max: The upper bound of the integral.
-            sigma_x: The standard deviation of the Gaussian.
-            mean_x: The mean of the Gaussian.
+            sigma: The standard deviation of the Gaussian.
+            mean: The mean of the Gaussian.
             scale: The scale of the Gaussian; the area under the complete curve (excluding
                 the base).
             base: The base of the Gaussian; a scalar added to the curve.
 
         Returns:
-            The integral of the Gaussian between xmin and xmax.
+            The integral of the Gaussian between ``x_min`` and ``x_max``.
 
         Raises:
             ValueError: If ``sigma`` is not positive.
@@ -316,8 +355,8 @@ class GaussianPSF(PSF):
 
         The integral is over the limits [y_min, y_max] and [x_min, x_max].
 
-        This function works for both scalar and array values of
-        x_min/x_max/y_min/y_max.
+        For a non-zero ``angle``, array bounds are broadcast and the integral is computed
+        elementwise over the flattened grid, then reshaped to the broadcast shape.
 
         Parameters:
             y_min: The lower bound of the integral in the Y dimension.
@@ -377,10 +416,15 @@ class GaussianPSF(PSF):
             return cast(float, np.mean(ret))
 
         x_min, x_max, y_min, y_max = np.broadcast_arrays(x_min, x_max, y_min, y_max)
-        res = np.empty(x_min.shape)
-        for x in range(x_min.shape[0]):
-            ys = np.linspace(y_min[x], y_max[x], angle_subsample)
-            xs = np.linspace(x_min[x], x_max[x], angle_subsample)
+        res = np.empty(x_min.shape, dtype=np.float64)
+        flat = res.ravel()
+        y_min_f = y_min.ravel()
+        y_max_f = y_max.ravel()
+        x_min_f = x_min.ravel()
+        x_max_f = x_max.ravel()
+        for i in range(flat.size):
+            ys = np.linspace(y_min_f[i], y_max_f[i], angle_subsample)
+            xs = np.linspace(x_min_f[i], x_max_f[i], angle_subsample)
             xindex, yindex = np.meshgrid(xs, ys)
 
             ret = GaussianPSF.gaussian_2d(
@@ -394,9 +438,9 @@ class GaussianPSF(PSF):
                 base=base,
                 angle=angle,
             )
-            res[x] = np.mean(ret)
+            flat[i] = np.mean(ret)
 
-        return res
+        return cast(float | npt.NDArray[np.floating], res)
 
     def eval_point(
         self,
@@ -420,10 +464,9 @@ class GaussianPSF(PSF):
             coord: The coordinate (y, x) at which to evaluate the PSF.
             scale: A scale factor to apply to the resulting PSF.
             base: A scalar added to the resulting PSF.
-            sigma: The standard deviation of the Gaussian. It may be specified here or
-                during the creation of the GaussianPSF object, but not both. May be a
-                scalar or a tuple (sigma_y, sigma_x), or None if sigma was specified at
-                creation time.
+            sigma: Standard deviations: a scalar (both axes) or a ``(sigma_y, sigma_x)``
+                tuple. Must not duplicate values fixed at construction; ``None`` if both
+                are already set on the instance.
             sigma_y: An alternative way to specify sigma_y. Used primarily for letting
                 sigma_y float during PSF fitting.
             sigma_x: An alternative way to specify sigma_x. Used primarily for letting
@@ -444,10 +487,10 @@ class GaussianPSF(PSF):
             raise ValueError('Cannot specify both sigma during init and sigma_y/x')
 
         if sigma is not None:
-            if not isinstance(sigma, (list, tuple)):
-                sy = sx = sigma
+            if not isinstance(sigma, tuple):
+                sy = sx = float(sigma)
             else:
-                sy, sx = sigma
+                sy, sx = sigma[0], sigma[1]
 
         if sigma_y is not None:
             sy = sigma_y
@@ -460,9 +503,9 @@ class GaussianPSF(PSF):
                 'or in the call to eval_point'
             )
 
-        r = self._angle
+        r: float = 0.0 if self._angle is None else float(self._angle)
         if angle is not None:
-            r = angle
+            r = float(angle)
 
         ret = GaussianPSF.gaussian_2d(
             coord[0],
@@ -510,10 +553,9 @@ class GaussianPSF(PSF):
             offset: The amount (offset_y, offset_x) to offset the center of the PSF.
             scale: A scale factor to apply to the resulting PSF.
             base: A scalar added to the resulting PSF.
-            sigma: The standard deviation of the Gaussian. It may be specified here or
-                during the creation of the GaussianPSF object, but not both. May be a
-                scalar or a tuple (sigma_y, sigma_x), or None if sigma was specified at
-                creation time.
+            sigma: Standard deviations: a scalar (both axes) or a ``(sigma_y, sigma_x)``
+                tuple. Must not duplicate values fixed at construction; ``None`` if both
+                are already set on the instance.
             sigma_y: An alternative way to specify sigma_y. Used primarily for letting
                 sigma_y float during PSF fitting.
             sigma_x: An alternative way to specify sigma_x. Used primarily for letting
@@ -534,19 +576,19 @@ class GaussianPSF(PSF):
             raise ValueError('Cannot specify both sigma during init and sigma_y/x')
 
         if sigma is not None:
-            if not isinstance(sigma, (list, tuple)):
-                sy = sx = sigma
+            if not isinstance(sigma, tuple):
+                sy = sx = float(sigma)
             else:
-                sy, sx = sigma
+                sy, sx = sigma[0], sigma[1]
 
         if sigma_y is not None:
             sy = sigma_y
         if sigma_x is not None:
             sx = sigma_x
 
-        r = self._angle
+        r_angle: float = 0.0 if self._angle is None else float(self._angle)
         if angle is not None:
-            r = angle
+            r_angle = float(angle)
 
         if sx is None or sy is None:
             raise ValueError(
@@ -554,7 +596,6 @@ class GaussianPSF(PSF):
                 'or in the call to eval_pixel'
             )
 
-        # There is a bug in type checking below?
         ret = GaussianPSF.gaussian_integral_2d(
             coord[0] - offset[0],
             coord[0] - offset[0] + 1.0,
@@ -566,11 +607,14 @@ class GaussianPSF(PSF):
             mean_x=self._mean_x,
             scale=scale,
             base=base,
-            angle=r,
+            angle=r_angle,
             angle_subsample=self._angle_subsample,
         )
         return ret
 
+    # Intentional override of :meth:`PSF._eval_rect`: ``rect_size`` / ``offset`` are
+    # narrowed to ``tuple``, Gaussian-specific keyword-only arguments are added, and the
+    # return type is ``np.floating``; call sites from the base class remain compatible.
     def _eval_rect(  # type: ignore[override]
         self,
         rect_size: tuple[int, int],
@@ -583,6 +627,22 @@ class GaussianPSF(PSF):
         sigma_x: float | None = None,
         angle: float | None = None,
     ) -> npt.NDArray[np.floating]:
+        """Pixel-integrated Gaussian on a rectangle (same grid as :meth:`eval_rect`).
+
+        Parameters:
+            rect_size: ``(size_y, size_x)`` patch shape (odd counts).
+            offset: Subpixel shift ``(y, x)`` passed to :meth:`eval_pixel`.
+            scale: Multiplicative scale for the Gaussian flux.
+            base: Additive constant per pixel after scaling.
+            sigma: Optional ``(sigma_y, sigma_x)`` pair overriding instance sigmas.
+            sigma_y: Override for ``sigma_y`` when fitting.
+            sigma_x: Override for ``sigma_x`` when fitting.
+            angle: Override for rotation angle (radians); instance default if ``None``.
+
+        Returns:
+            A 2-D :class:`numpy.ndarray` of floats with shape ``rect_size``, each entry
+            the integral of the Gaussian over that pixel.
+        """
 
         rect_size_y, rect_size_x = rect_size
         y_coords = np.repeat(
@@ -609,6 +669,9 @@ class GaussianPSF(PSF):
 
         return rect
 
+    # Same rationale as :meth:`_eval_rect` above: extends :meth:`PSF.eval_rect` with
+    # Gaussian kwargs and concrete tuple types while delegating to
+    # :meth:`PSF._eval_rect_smeared`.
     def eval_rect(  # type: ignore[override]
         self,
         rect_size: tuple[int, int],
@@ -646,10 +709,9 @@ class GaussianPSF(PSF):
                 more precise but also take longer to compute.
             scale: A scale factor to apply to the resulting PSF.
             base: A scalar added to the resulting PSF.
-            sigma: The standard deviation of the Gaussian. It may be specified here or
-                during the creation of the GaussianPSF object, but not both. May be a
-                scalar or a tuple (sigma_y, sigma_x), or None if sigma was specified at
-                creation time.
+            sigma: Standard deviations: a scalar (both axes) or a ``(sigma_y, sigma_x)``
+                tuple. Must not duplicate values fixed at construction; ``None`` if both
+                are already set on the instance.
             sigma_y: An alternative way to specify sigma_y. Used primarily for letting
                 sigma_y float during PSF fitting.
             sigma_x: An alternative way to specify sigma_x. Used primarily for letting
