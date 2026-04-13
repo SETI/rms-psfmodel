@@ -11,6 +11,8 @@ Welcome to the Documentation for rms-psfmodel!
    :maxdepth: 2
    :caption: Contents:
 
+   psf_gui
+   characterize_gauss_fit
    contributing
    code_of_conduct
    module

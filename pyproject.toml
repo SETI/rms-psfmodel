@@ -64,6 +64,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 psfmodel = ["py.typed"]
+characterize_gauss_fit = ["defaults.yaml", "test_config.yaml"]
 
 [tool.setuptools_scm]
 local_scheme = "no-local-version"
@@ -90,9 +91,14 @@ docs = [
   "sphinxcontrib-mermaid",
   "sphinx-rtd-theme",
 ]
+characterize = [
+  "matplotlib>=3.7",
+  "pyyaml>=6.0",
+]
 
 [project.scripts]
-psf-gui = "psf_gui.main:main"
+psf_gui = "psf_gui.main:main"
+characterize_gauss_fit = "characterize_gauss_fit.main:main"
 
 # Tool configuration
 
@@ -100,7 +106,7 @@ psf-gui = "psf_gui.main:main"
 branch = true
 parallel = true
 source = ["psfmodel"]
-omit = ["tests/*", "**/_version.py", "**/psfmodel/hst.py", "**/psf_gui/**"]
+omit = ["tests/*", "**/_version.py", "**/psfmodel/hst.py", "**/psf_gui/**", "**/characterize_gauss_fit/**"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -130,6 +136,14 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "scipy.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "matplotlib.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "yaml"
 ignore_missing_imports = true
 
 #[[tool.mypy.overrides]]

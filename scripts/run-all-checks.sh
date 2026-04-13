@@ -12,7 +12,8 @@
 # Options:
 #   -p, --parallel         Run all requested checks in parallel (default)
 #   -s, --sequential       Run all requested checks sequentially
-#   -w, --pytest-workers N Pytest workers: auto (default), 1 (serial), or N
+#   -w, --pytest-workers N Override pytest -n: auto, 1 (serial), or N (default:
+#                          use [tool.pytest.ini_options] addopts in pyproject.toml)
 #   -c, --code             Run all code checks (sets each RUN_* code flag true)
 #   -d, --docs             Run Sphinx and PyMarkdown (RUN_SPHINX, RUN_PYMARKDOWN)
 #   -m, --markdown         Run only PyMarkdown (RUN_PYMARKDOWN)
@@ -74,7 +75,8 @@ RESET='\033[0m'
 
 # Default options
 PARALLEL=true
-PYTEST_WORKERS=auto
+PYTEST_WORKERS_SET=false
+PYTEST_WORKERS=
 RUN_RUFF_CHECK=false
 RUN_RUFF_FORMAT=false
 RUN_MYPY=false
@@ -198,10 +200,12 @@ while [[ $# -gt 0 ]]; do
                 show_usage
                 exit 1
             fi
+            PYTEST_WORKERS_SET=true
             PYTEST_WORKERS="$2"
             shift 2
             ;;
         --pytest-workers=*)
+            PYTEST_WORKERS_SET=true
             PYTEST_WORKERS="${1#*=}"
             shift
             ;;
@@ -307,7 +311,11 @@ else
     print_info "Running checks in SEQUENTIAL mode"
 fi
 if [ "$RUN_PYTEST" = true ] && [ "$ENABLE_PYTEST" = true ]; then
-    print_info "Pytest workers: $PYTEST_WORKERS"
+    if [ "$PYTEST_WORKERS_SET" = true ]; then
+        print_info "Pytest -n override: $PYTEST_WORKERS"
+    else
+        print_info "Pytest -n: from pyproject.toml (no -w override)"
+    fi
 fi
 
 # True if at least one code check is both selected (RUN_*) and enabled (ENABLE_*).
@@ -385,17 +393,29 @@ run_code_checks() {
         fi
     fi
 
-    # -n controls parallelism; --dist loadscope keeps each test module on one
+    # Pass -n only when -w/--pytest-workers is set; otherwise addopts in
+    # pyproject.toml supply -n. --dist loadscope keeps each test module on one
     # worker to avoid time-mocking and fixture-isolation interference.
     # Coverage (--cov=psfmodel) and strict options come from pyproject.toml addopts.
     if [ "$RUN_PYTEST" = true ] && [ "$ENABLE_PYTEST" = true ]; then
-        print_info "Running pytest (-n ${PYTEST_WORKERS})..."
-        if python -m pytest -q -n "$PYTEST_WORKERS" --dist loadscope tests; then
-            print_success "Pytest passed"
+        if [ "$PYTEST_WORKERS_SET" = true ]; then
+            print_info "Running pytest (-n ${PYTEST_WORKERS})..."
+            if python -m pytest -q -n "$PYTEST_WORKERS" --dist loadscope tests; then
+                print_success "Pytest passed"
+            else
+                print_error "Pytest failed"
+                failed=true
+                failed_checks="${failed_checks}Code - Pytest"$'\n'
+            fi
         else
-            print_error "Pytest failed"
-            failed=true
-            failed_checks="${failed_checks}Code - Pytest"$'\n'
+            print_info "Running pytest (parallelism from pyproject.toml)..."
+            if python -m pytest -q --dist loadscope tests; then
+                print_success "Pytest passed"
+            else
+                print_error "Pytest failed"
+                failed=true
+                failed_checks="${failed_checks}Code - Pytest"$'\n'
+            fi
         fi
     fi
 
