@@ -79,12 +79,15 @@ def _float_cell(value: float | None) -> str:
         value: The float to format, or ``None`` for a not-applicable field.
 
     Returns:
-        The formatted string. NaN is written as ``"NaN"``, None as ``""``.
+        The formatted string. NaN is written as ``"NaN"``, infinities as
+        ``"Inf"`` / ``"-Inf"``, and None as ``""``.
     """
     if value is None:
         return ''
     if math.isnan(value):
         return 'NaN'
+    if math.isinf(value):
+        return 'Inf' if value > 0 else '-Inf'
     return repr(float(value))
 
 
@@ -175,7 +178,7 @@ def write_csv(
     with csv_path.open('w', newline='', encoding='utf-8') as fh:
         writer = csv.DictWriter(fh, fieldnames=_CSV_COLUMNS)
         writer.writeheader()
-        for spec, result in zip(specs, results, strict=False):
+        for spec, result in zip(specs, results, strict=True):
             writer.writerow(_result_row(study, spec, result))
 
     return csv_path
@@ -225,7 +228,7 @@ def _aggregate_results(results: list[TrialResult]) -> dict[str, Any]:
     converged = [r for r in results if r.converged]
     n_converged = len(converged)
 
-    pos_errs = [r.pos_err for r in converged]
+    pos_errs = [r.pos_err for r in converged if math.isfinite(r.pos_err)]
     sigma_y_errs = [r.sigma_y_err for r in converged if r.sigma_y_err is not None]
     sigma_x_errs = [r.sigma_x_err for r in converged if r.sigma_x_err is not None]
     angle_errs = [r.angle_err for r in converged if r.angle_err is not None]
@@ -246,6 +249,29 @@ def _aggregate_results(results: list[TrialResult]) -> dict[str, Any]:
         'scale_err_mean': _safe_mean(scale_errs),
         'scale_err_std': _safe_std(scale_errs),
     }
+
+
+def _sanitize_json(obj: Any) -> Any:
+    """Recursively replace non-finite floats with None for JSON safety.
+
+    :func:`json.dump` with ``allow_nan=True`` emits non-standard tokens
+    (``NaN``, ``Infinity``, ``-Infinity``) that many JSON parsers reject.
+    This function replaces such values with ``None`` (serialised as ``null``).
+
+    Parameters:
+        obj: Any JSON-serialisable Python object (dict, list, float, etc.).
+
+    Returns:
+        A new object with the same structure but with non-finite floats
+        replaced by ``None``.
+    """
+    if isinstance(obj, float):
+        return None if not math.isfinite(obj) else obj
+    if isinstance(obj, dict):
+        return {k: _sanitize_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_json(v) for v in obj]
+    return obj
 
 
 def write_json_summary(
@@ -276,7 +302,14 @@ def write_json_summary(
 
     Returns:
         Path to the written JSON file.
+
+    Raises:
+        ValueError: If ``specs`` and ``results`` have different lengths.
     """
+    if len(specs) != len(results):
+        raise ValueError(
+            f'specs ({len(specs)}) and results ({len(results)}) must have the same length'
+        )
     study_dir = output_dir / study
     study_dir.mkdir(parents=True, exist_ok=True)
     json_path = study_dir / 'summary.json'
@@ -304,6 +337,6 @@ def write_json_summary(
     }
 
     with json_path.open('w', encoding='utf-8') as fh:
-        json.dump(payload, fh, indent=2, allow_nan=True)
+        json.dump(_sanitize_json(payload), fh, indent=2)
 
     return json_path

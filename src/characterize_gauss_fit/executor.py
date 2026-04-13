@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import logging
+import multiprocessing
 from collections.abc import Callable
 
 from characterize_gauss_fit.trial import TrialResult, TrialSpec, run_trial
@@ -79,7 +80,8 @@ def run_trials(
         trial_specs: List of :class:`~trial.TrialSpec` objects to execute.
         num_workers: Number of parallel worker processes. ``1`` runs all trials
             sequentially in the calling process with no multiprocessing overhead.
-            Values ``>1`` use :class:`concurrent.futures.ProcessPoolExecutor`.
+            Values ``>1`` use :class:`concurrent.futures.ProcessPoolExecutor`
+            with the ``spawn`` start method to avoid fork-related crashes.
         progress_callback: Optional callable ``(completed, total)`` invoked after
             each trial result is collected, useful for progress display.
 
@@ -90,13 +92,24 @@ def run_trials(
     total = len(trial_specs)
     results: list[TrialResult] = []
 
+    if not isinstance(num_workers, int) or num_workers < 1:
+        raise ValueError(f'num_workers must be a positive integer, got {num_workers!r}')
+
     if num_workers == 1:
         for idx, spec in enumerate(trial_specs):
             results.append(_safe_run_trial(spec))
             if progress_callback is not None:
                 progress_callback(idx + 1, total)
     else:
-        with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as pool:
+        # Use the 'spawn' start method so worker processes begin as fresh
+        # Python interpreters.  The default 'fork' method on Linux copies
+        # the parent's BLAS/OpenMP thread-pool state into the child without
+        # actually transferring the threads, causing a segfault during worker
+        # cleanup when those phantom pools are torn down.
+        mp_ctx = multiprocessing.get_context('spawn')
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=num_workers, mp_context=mp_ctx
+        ) as pool:
             futures = {pool.submit(_safe_run_trial, spec): i for i, spec in enumerate(trial_specs)}
             # Collect in submission order to preserve determinism.
             ordered: list[TrialResult | None] = [None] * total
@@ -106,6 +119,9 @@ def run_trials(
                 if progress_callback is not None:
                     progress_callback(n_done, total)
         # All futures completed; ordered contains no None entries.
+        assert all(r is not None for r in ordered), (
+            'Internal error: some futures did not produce a result'
+        )
         results = [r for r in ordered if r is not None]
 
     return results

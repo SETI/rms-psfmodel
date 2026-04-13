@@ -48,6 +48,12 @@ _STUDY_REGISTRY: dict[str, _StudyRunner] = {
     'hot_pixel_rejection': study_hot_pixels.run,
 }
 
+# Ensure STUDY_NAMES (from config) and _STUDY_REGISTRY stay in sync.
+assert set(STUDY_NAMES) == set(_STUDY_REGISTRY), (
+    f'STUDY_NAMES and _STUDY_REGISTRY are out of sync: '
+    f'{set(STUDY_NAMES).symmetric_difference(set(_STUDY_REGISTRY))}'
+)
+
 
 def _build_parser() -> argparse.ArgumentParser:
     """Build and return the argument parser.
@@ -94,7 +100,8 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             'Number of parallel worker processes. '
-            '1 (default) = sequential in the main process. '
+            'Default: None (resolved from config file). '
+            '1 = sequential in the main process; '
             '>1 = concurrent.futures.ProcessPoolExecutor.'
         ),
     )
@@ -238,11 +245,16 @@ def main() -> None:
         print(f'[{name}] {status} ({elapsed:.1f}s)', file=sys.stderr)
 
     total = time.monotonic() - overall_start
-    print(
-        f'\nAll studies complete. Total time: {total:.1f}s. Output: {cfg.output_dir}',
-        file=sys.stderr,
-    )
-
-    if len(failed) > 0:
+    if failed:
+        print(
+            f'\nCompleted with {len(failed)} failed studies. '
+            f'Total time: {total:.1f}s. Output: {cfg.output_dir}',
+            file=sys.stderr,
+        )
         print(f'FAILED studies: {", ".join(failed)}', file=sys.stderr)
         sys.exit(1)
+    else:
+        print(
+            f'\nAll studies complete. Total time: {total:.1f}s. Output: {cfg.output_dir}',
+            file=sys.stderr,
+        )

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import math
 import pathlib
 from typing import Any
 
@@ -33,12 +34,22 @@ class ConstraintMode:
     """A single fitter constraint configuration for Study 5.
 
     Specifies which PSF parameters are fixed and what values they are fixed at.
+
+    When ``sigma_is_fraction`` is ``True``, ``fit_sigma_y`` and ``fit_sigma_x``
+    are interpreted as *error fractions* of the true sigma: ``0.0`` means fix
+    at the true value, positive means fix at ``true_sigma * (1 + fraction)``.
+    When ``sigma_is_fraction`` is ``False``, ``fit_sigma_y`` and ``fit_sigma_x``
+    are actual sigma values (or ``None`` meaning float during fitting).
+
+    For ``fit_angle``: ``None`` = float, ``0.0`` = fix at true angle, other
+    value = fix at ``true_angle + fit_angle`` radians.
     """
 
     label: str
     fit_sigma_y: float | None
     fit_sigma_x: float | None
     fit_angle: float | None
+    sigma_is_fraction: bool = False
 
 
 def _build_modes(cfg: Config) -> list[ConstraintMode]:
@@ -65,11 +76,7 @@ def _build_modes(cfg: Config) -> list[ConstraintMode]:
             label = 'sigma_fixed_correct'
         else:
             label = f'sigma_fixed_err{int(frac * 100):d}pct'
-        # Actual fixed values are applied per shape in build_specs; here we
-        # record the fraction, not the value, using a sentinel.
-        # We embed frac as a tag by setting it as the sigma values temporarily.
-        # The actual per-shape expansion happens in build_specs.
-        modes.append(ConstraintMode(label, frac, frac, None))
+        modes.append(ConstraintMode(label, frac, frac, None, sigma_is_fraction=True))
 
     # Angle fixed at true value, sigma floats.
     modes.append(ConstraintMode('angle_fixed_correct', None, None, 0.0))
@@ -83,18 +90,20 @@ def _build_modes(cfg: Config) -> list[ConstraintMode]:
     )
 
     # All fixed at correct values.
-    modes.append(ConstraintMode('all_fixed_correct', 0.0, 0.0, 0.0))
+    modes.append(ConstraintMode('all_fixed_correct', 0.0, 0.0, 0.0, sigma_is_fraction=True))
 
-    # All fixed with combined errors.
-    max_frac = max(study.sigma_error_fractions) if study.sigma_error_fractions else 0.0
-    modes.append(
-        ConstraintMode(
-            'all_fixed_errors',
-            max_frac,
-            max_frac,
-            study.angle_error_rad,
+    # All fixed with combined errors (only when sigma_error_fractions is non-empty).
+    if study.sigma_error_fractions:
+        max_frac = max(study.sigma_error_fractions)
+        modes.append(
+            ConstraintMode(
+                'all_fixed_errors',
+                max_frac,
+                max_frac,
+                study.angle_error_rad,
+                sigma_is_fraction=True,
+            )
         )
-    )
 
     return modes
 
@@ -125,18 +134,17 @@ def build_specs(cfg: Config) -> tuple[list[TrialSpec], list[ConstraintMode]]:
             # Resolve fixed sigma values from mode fractions.
             if mode.fit_sigma_y is None:
                 fit_sigma_y: float | None = None
-            elif mode.fit_sigma_y == 0.0:
-                fit_sigma_y = true_sigma_y
-            else:
-                # mode.fit_sigma_y is the error fraction (stored as float).
+            elif mode.sigma_is_fraction:
                 fit_sigma_y = true_sigma_y * (1.0 + float(mode.fit_sigma_y))
+            else:
+                fit_sigma_y = mode.fit_sigma_y
 
             if mode.fit_sigma_x is None:
                 fit_sigma_x: float | None = None
-            elif mode.fit_sigma_x == 0.0:
-                fit_sigma_x = true_sigma_x
-            else:
+            elif mode.sigma_is_fraction:
                 fit_sigma_x = true_sigma_x * (1.0 + float(mode.fit_sigma_x))
+            else:
+                fit_sigma_x = mode.fit_sigma_x
 
             # Resolve fixed angle values from mode.
             if mode.fit_angle is None:
@@ -238,7 +246,7 @@ def _write_outputs(
                 if result.sigma_y_err is not None:
                     sigma_y_err_vals[m_idx, s_idx] = abs(result.sigma_y_err)
                 if result.angle_err is not None and np.isfinite(result.angle_err):
-                    angle_err_vals[m_idx, s_idx] = result.angle_err
+                    angle_err_vals[m_idx, s_idx] = math.degrees(result.angle_err)
 
     fig = plot_constraint_summary(
         mode_labels,
@@ -250,17 +258,24 @@ def _write_outputs(
         sigma_y_err_vals,
         angle_err_vals,
         title='Effect of parameter constraints on fitting accuracy',
+        note=(
+            f'box={study.box_size}, '
+            f'offset=({study.offset[0]:+.2f},{study.offset[1]:+.2f}), '
+            f'noiseless, scale={study.scale:.0f}'
+        ),
     )
-    save_figure(fig, study_dir, 'constraint_summary.png')
+    save_figure(fig, study_dir, f'{_STUDY_NAME}_summary.png')
 
     write_csv(cfg.output_dir, _STUDY_NAME, specs, results)
 
+    # Precompute position index for O(1) grouping lambda access.
+    spec_index: dict[int, int] = {id(s): i for i, s in enumerate(specs)}
     groups: list[dict[str, Any]] = utils.build_groups_by_keys(
         specs,
         results,
         [
-            ('constraint_mode_idx', lambda s: specs.index(s) // n_shapes),
-            ('psf_shape_idx', lambda s: specs.index(s) % n_shapes),
+            ('constraint_mode_idx', lambda s: spec_index[id(s)] // n_shapes),
+            ('psf_shape_idx', lambda s: spec_index[id(s)] % n_shapes),
         ],
     )
     write_json_summary(

@@ -49,7 +49,7 @@ pip install rms-psfmodel
 
 Details of each class are available in the [module documentation](https://rms-psfmodel.readthedocs.io/en/latest/module.html).
 
-After installation, an optional Tkinter-based PSF explorer is available as the `psf_gui` command (or `python -m psf_gui` with `src` on `PYTHONPATH`). It requires a working Tcl/Tk (for example the `python3-tk` package on Debian/Ubuntu).
+After installation, an optional Tkinter-based PSF explorer is available as the `psf_gui` command (or `python -m psf_gui` with `src` on `PYTHONPATH`). A working Tcl/Tk installation is required (for example, install the `python3-tk` package on Debian/Ubuntu).
 
 A characterization tool that systematically measures Gaussian PSF fitting accuracy across a wide parameter space is available as the `characterize_gauss_fit` command. Install the extra dependencies with `pip install rms-psfmodel[characterize]`.
 

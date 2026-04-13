@@ -14,12 +14,14 @@ noise_samples: 3
 
 studies:
 
-  # Study 1: 2 box sizes x 3 sigmas = 6 trials
+  # Study 1: 2 box sizes x 3 sigmas x 2 offsets = 12 trials
   box_vs_sigma:
     enabled: true
     box_sizes: [9, 21]
     sigmas: [0.5, 1.0, 2.0]
-    offset: [0.25, 0.25]
+    offsets:
+      - [0.0, 0.0]
+      - [0.25, 0.25]
     angle: 0.0
     scale: 1.0
     fitting:
@@ -36,7 +38,7 @@ studies:
     fitting:
       bkgnd_degree: null
 
-  # Study 3: 3 deltas x 2 sigmas x (1 noiseless + 1 snr) x up to 3 noise = ~18 trials
+  # Study 3: 3 deltas x 2 sigmas x (1 noiseless + 1 snr) x 3 noise = 24 trials
   min_detectable_offset:
     enabled: true
     delta_offsets: [0.01, 0.05, 0.2]
@@ -59,7 +61,7 @@ studies:
     fitting:
       bkgnd_degree: null
 
-  # Study 5: 3 modes x 2 shapes = 18 trials (modes: all_float, sigma_fixed_correct,
+  # Study 5: 5 modes x 2 shapes = 24 trials (modes: all_float, sigma_fixed_correct,
   #          angle_fixed_correct, all_fixed_correct, all_fixed_errors)
   constraint_modes:
     enabled: true
@@ -74,7 +76,7 @@ studies:
     offset: [0.25, 0.25]
     scale: 1.5
 
-  # Study 6: 2 background types x 2 fitting degrees x 1 amplitude x 1 ignore_center = 4 trials
+  # Study 6: 2 background types x 2 fitting degrees x 1 amplitude x 1 ignore_center x 2 offsets = 8 trials
   background:
     enabled: true
     background_amplitudes: [0.1]
@@ -84,7 +86,9 @@ studies:
     background_types: [none, constant]
     box_size: 13
     sigma: [1.0, 1.0]
-    offset: [0.25, 0.25]
+    offsets:
+      - [0.0, 0.0]
+      - [0.25, 0.25]
 
   # Study 7: 4 SNR points x 1 sigma x 3 noise samples = 12 trials
   noise_sensitivity:
@@ -95,7 +99,7 @@ studies:
     noise_samples: 3
     box_size: 13
 
-  # Study 8: 2 num_hot x 2 num_sigma x 1 amplitude x 3 noise samples = 12 trials
+  # Study 8: 2 num_hot x 1 num_sigma x 1 amplitude x 3 noise samples = 6 trials
   hot_pixel_rejection:
     enabled: true
     num_hot_pixels: [0, 3]

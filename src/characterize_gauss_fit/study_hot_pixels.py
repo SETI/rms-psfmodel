@@ -29,6 +29,25 @@ _LOG = logging.getLogger(__name__)
 _STUDY_NAME = 'hot_pixel_rejection'
 
 
+def _make_num_sigma_list(
+    num_sigma_with_null: bool, num_sigma_values: list[float]
+) -> list[float | None]:
+    """Build the ordered num_sigma list, prepending None when requested.
+
+    Parameters:
+        num_sigma_with_null: If ``True``, prepend ``None`` (no rejection).
+        num_sigma_values: The configured threshold values.
+
+    Returns:
+        Ordered list of thresholds including ``None`` when requested.
+    """
+    result: list[float | None] = []
+    if num_sigma_with_null:
+        result.append(None)
+    result.extend(num_sigma_values)
+    return result
+
+
 def build_specs(cfg: Config) -> list[TrialSpec]:
     """Build trial specs for Study 8.
 
@@ -48,10 +67,7 @@ def build_specs(cfg: Config) -> list[TrialSpec]:
     noise_rms = scale / study.snr
 
     # Build num_sigma list including null if requested.
-    num_sigma_list: list[float | None] = []
-    if study.num_sigma_with_null:
-        num_sigma_list.append(None)
-    num_sigma_list.extend(study.num_sigma_values)
+    num_sigma_list = _make_num_sigma_list(study.num_sigma_with_null, study.num_sigma_values)
 
     specs: list[TrialSpec] = []
     seed = 8000
@@ -109,6 +125,39 @@ def run(cfg: Config, *, num_workers: int = 1) -> None:
     _write_outputs(cfg, specs, results, study_dir)
 
 
+def _convergence_means(
+    num_sigma_list: list[float | None],
+    n_hot_list: list[int],
+    hot_amp: float,
+    bucket_map: dict[tuple[int, float | None, float], list[TrialResult]],
+) -> list[npt.NDArray[np.float64]]:
+    """Compute per-series convergence fractions for a given hot amplitude.
+
+    Parameters:
+        num_sigma_list: Ordered list of num_sigma thresholds tested.
+        n_hot_list: Ordered list of hot-pixel counts tested.
+        hot_amp: The hot-pixel amplitude being examined.
+        bucket_map: Pre-built lookup mapping (n_hot, num_sigma, hot_amp)
+            to a list of :class:`~trial.TrialResult` objects.
+
+    Returns:
+        A list of 1-D float64 arrays, one per ``num_sigma_list`` entry.
+        Each element is the mean convergence fraction across the
+        ``n_hot_list`` axis (1.0 = all converged, 0.0 = all failed).
+    """
+    series: list[npt.NDArray[np.float64]] = []
+    for ns_val in num_sigma_list:
+        fracs: list[float] = []
+        for n_hot in n_hot_list:
+            bucket = bucket_map.get((n_hot, ns_val, round(hot_amp, 9)), [])
+            if len(bucket) == 0:
+                fracs.append(float('nan'))
+            else:
+                fracs.append(float(np.mean([float(r.converged) for r in bucket])))
+        series.append(np.array(fracs, dtype=np.float64))
+    return series
+
+
 def _write_outputs(
     cfg: Config,
     specs: list[TrialSpec],
@@ -125,22 +174,51 @@ def _write_outputs(
     """
     study = cfg.studies.hot_pixel_rejection
 
-    num_sigma_list: list[float | None] = []
-    if study.num_sigma_with_null:
-        num_sigma_list.append(None)
-    num_sigma_list.extend(study.num_sigma_values)
+    num_sigma_list = _make_num_sigma_list(study.num_sigma_with_null, study.num_sigma_values)
 
     n_hot_list = study.num_hot_pixels
     hot_amps = study.hot_amplitudes
 
     x_arr = np.array(n_hot_list, dtype=float)
-    x_labels = [str(n) for n in n_hot_list]
     ns_labels = ['no_rejection' if ns is None else f'num_sigma={ns:.0f}' for ns in num_sigma_list]
 
-    n_ns = len(num_sigma_list)
-    n_hot = len(n_hot_list)
+    # Build O(1) lookup: (hot_pixel_count, num_sigma, hot_pixel_amplitude) -> bucket.
+    bucket_map: dict[tuple[int, float | None, float], list[TrialResult]] = {}
+    for spec, result in zip(specs, results, strict=True):
+        key: tuple[int, float | None, float] = (
+            spec.hot_pixel_count, spec.num_sigma, round(spec.hot_pixel_amplitude, 9)
+        )
+        if key not in bucket_map:
+            bucket_map[key] = []
+        bucket_map[key].append(result)
 
     for ha_idx, hot_amp in enumerate(hot_amps):
+        plot_note = (
+            f'\u03c3=({study.sigma[0]:.1f},{study.sigma[1]:.1f}) px, '
+            f'box={study.box_size}, '
+            f'offset=({study.offset[0]:+.2f},{study.offset[1]:+.2f}), '
+            f'SNR={study.snr:.0f}, {study.noise_samples} samples/pt'
+        )
+        # --- Convergence-rate plot -------------------------------------------
+        conv_means = _convergence_means(num_sigma_list, n_hot_list, hot_amp, bucket_map)
+        conv_stds = [np.zeros_like(m) for m in conv_means]  # deterministic fraction
+        fig = plot_line_with_bands(
+            x_arr,
+            conv_means,
+            conv_stds,
+            labels=ns_labels,
+            title=f'Convergence fraction vs. hot pixels -- amplitude={hot_amp:.0f}x peak',
+            xlabel='Number of hot pixels',
+            ylabel='Fraction of trials converged',
+            log_y=False,
+            note=plot_note,
+        )
+        save_figure(
+            fig, study_dir,
+            f'{_STUDY_NAME}_convergence_hotamp{ha_idx}.png',
+        )
+
+        # --- Position-error plots --------------------------------------------
         for metric_attr, metric_label, fname_prefix in [
             ('pos_err',   'Mean position error, Euclidean (pixels)', 'pos_err'),
             ('pos_err_y', 'Mean |pos_err_y| (pixels)',               'pos_err_y'),
@@ -152,14 +230,9 @@ def _write_outputs(
                 means: list[float] = []
                 stds: list[float] = []
                 for n_hot_count in n_hot_list:
-                    bucket: list[TrialResult] = []
-                    for spec, result in zip(specs, results, strict=False):
-                        if (
-                            spec.hot_pixel_count == n_hot_count
-                            and spec.num_sigma == ns_val
-                            and abs(spec.hot_pixel_amplitude - hot_amp) < 1e-9
-                        ):
-                            bucket.append(result)
+                    bucket = bucket_map.get(
+                        (n_hot_count, ns_val, round(hot_amp, 9)), []
+                    )
                     arr = np.abs(utils.collect_metric(bucket, metric_attr))
                     means.append(utils.safe_nanmean(arr))
                     stds.append(utils.safe_nanstd(arr))
@@ -171,16 +244,16 @@ def _write_outputs(
                 y_means,
                 y_stds,
                 labels=ns_labels,
-                title=f'{metric_label} vs. hot pixels -- amplitude={hot_amp:.0f}x peak',
+                title=(
+                    f'{metric_label} vs. hot pixels -- amplitude={hot_amp:.0f}x peak'
+                    '\n(missing lines = 0 % convergence; see companion convergence plot)'
+                ),
                 xlabel='Number of hot pixels',
                 ylabel=metric_label,
                 log_y=True,
+                note=plot_note,
             )
-            save_figure(fig, study_dir, f'{fname_prefix}_hotamp{ha_idx}.png')
-
-    _ = n_hot
-    _ = n_ns
-    _ = x_labels
+            save_figure(fig, study_dir, f'{_STUDY_NAME}_{fname_prefix}_hotamp{ha_idx}.png')
 
     write_csv(cfg.output_dir, _STUDY_NAME, specs, results)
 

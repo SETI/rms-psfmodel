@@ -56,6 +56,6 @@ python -m psf_gui
 - **Noise simulation** -- add Gaussian noise to the synthetic PSF image and
   observe the effect on fitting accuracy.
 - **Residual display** -- view the difference between the fitted model and the
-  data after position optimisation.
+  data after position optimization.
 - **Parameter readout** -- fitted position, sigma, angle, and scale are
   displayed numerically alongside their true injected values.

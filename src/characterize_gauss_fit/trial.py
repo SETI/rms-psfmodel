@@ -166,7 +166,6 @@ def _make_background(
     Raises:
         ValueError: If ``background_type`` is not recognised.
     """
-    half = box_size // 2
     if background_type == BACKGROUND_TYPE_NONE:
         return np.zeros((box_size, box_size), dtype=np.float64)
 
@@ -193,8 +192,6 @@ def _make_background(
         noise = rng.normal(0.0, noise_rms * 0.5, size=(box_size, box_size))
         return (constant + noise).astype(np.float64)
 
-    # Suppress the linter warning for the "impossible" half = box_size // 2 unused var.
-    _ = half
     raise ValueError(
         f'Unknown background_type "{background_type}". '
         f'Valid options: {BACKGROUND_TYPE_NONE}, {BACKGROUND_TYPE_CONSTANT}, '
@@ -258,6 +255,12 @@ def synthesize_image(spec: TrialSpec) -> tuple[npt.NDArray[np.float64], float, f
 
     # --- Inject hot pixels ---
     if spec.hot_pixel_count > 0:
+        total_pixels = spec.box_size * spec.box_size
+        if spec.hot_pixel_count > total_pixels:
+            raise ValueError(
+                f'hot_pixel_count ({spec.hot_pixel_count}) exceeds total pixels '
+                f'({total_pixels}) for box_size={spec.box_size}'
+            )
         hot_amplitude = spec.hot_pixel_amplitude * psf_peak
         # Randomise positions uniformly over the full patch.
         flat_indices = rng.choice(
@@ -365,10 +368,14 @@ def run_trial(spec: TrialSpec) -> TrialResult:
 
     if 'sigma_y' in details:
         sigma_y_fit = float(details['sigma_y'])
-        sigma_y_err = (sigma_y_fit - spec.sigma_y) / spec.sigma_y
+        sigma_y_err = (
+            (sigma_y_fit - spec.sigma_y) / spec.sigma_y if spec.sigma_y != 0.0 else None
+        )
     if 'sigma_x' in details:
         sigma_x_fit = float(details['sigma_x'])
-        sigma_x_err = (sigma_x_fit - spec.sigma_x) / spec.sigma_x
+        sigma_x_err = (
+            (sigma_x_fit - spec.sigma_x) / spec.sigma_x if spec.sigma_x != 0.0 else None
+        )
 
     # Retrieve fitted angle if it was floating.
     angle_fit: float | None = None

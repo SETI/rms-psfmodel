@@ -117,7 +117,7 @@ def _write_outputs(
     n_ratios = len(study.sigma_ratios)
     n_sigma_x = len(study.sigma_x_values)
 
-    angle_labels = [f'{a / math.pi:.2f}pi' for a in angles]
+    angle_labels = [f'{math.degrees(a):.0f}\u00b0' for a in angles]
     ratio_labels = [f'{r:.2f}' for r in study.sigma_ratios]
 
     trials_per_sigma_x = n_ratios * n_angles
@@ -144,7 +144,7 @@ def _write_outputs(
                 if result.sigma_y_err is not None:
                     sigma_y_err_grid[r_idx, a_idx] = abs(result.sigma_y_err)
                 if not is_circular and result.angle_err is not None:
-                    angle_err_grid[r_idx, a_idx] = result.angle_err
+                    angle_err_grid[r_idx, a_idx] = math.degrees(result.angle_err)
 
         label = f'sigma_x={sigma_x:.1f}'
         for data, metric_title, fname_prefix, cbar in [
@@ -155,7 +155,7 @@ def _write_outputs(
             (pos_err_x_grid,
              f'|pos_err_x| -- {label}',                'pos_err_x', 'log10(|pos_err_x|)'),
             (angle_err_grid,
-             f'Angle error (rad) -- {label}',          'angle_err', 'Angle error (rad)'),
+             f'Angle error (\u00b0) -- {label}',          'angle_err', 'Angle error (\u00b0)'),
             (sigma_y_err_grid,
              f'Rel sigma_y error -- {label}',          'sigma_y_err', 'log10(rel error)'),
         ]:
@@ -165,13 +165,18 @@ def _write_outputs(
                 angle_labels,
                 ratio_labels,
                 title=metric_title,
-                xlabel='Angle (units of pi)',
+                xlabel='Angle (degrees)',
                 ylabel='sigma_y / sigma_x ratio',
                 cbar_label=cbar,
                 log_scale=use_log,
                 mask=fail_mask,
+                note=(
+                    f'box={study.box_size}, '
+                    f'offset=({study.offset[0]:+.2f},{study.offset[1]:+.2f}), '
+                    f'no background, noiseless, \u03c3 and angle fitted freely'
+                ),
             )
-            save_figure(fig, study_dir, f'{fname_prefix}_sx{sigma_x:.1f}.png')
+            save_figure(fig, study_dir, f'{_STUDY_NAME}_{fname_prefix}_sx{sigma_x:.1f}.png')
 
     write_csv(cfg.output_dir, _STUDY_NAME, specs, results)
 
@@ -180,7 +185,10 @@ def _write_outputs(
         results,
         [
             ('sigma_x', lambda s: s.sigma_x),
-            ('sigma_ratio', lambda s: round(s.sigma_y / s.sigma_x, 4)),
+            (
+                'sigma_ratio',
+                lambda s: round(s.sigma_y / s.sigma_x, 4) if s.sigma_x != 0.0 else None,
+            ),
             ('angle_true', lambda s: round(s.angle, 4)),
         ],
     )

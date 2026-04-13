@@ -6,4 +6,5 @@
 
 from characterize_gauss_fit.main import main
 
-main()
+if __name__ == '__main__':
+    main()

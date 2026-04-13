@@ -63,8 +63,15 @@ studies:
     box_sizes: [5, 7, 9, 11, 13, 17, 21, 25, 31]
     # Symmetric PSF sigma values (pixels) to test.
     sigmas: [0.3, 0.5, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0]
-    # Subpixel offset [offset_y, offset_x] applied to the PSF center.
-    offset: [0.25, 0.25]
+    # List of [offset_y, offset_x] pairs (fractional pixel offsets from pixel centre).
+    # Each entry produces a separate set of heatmap plots labelled by its offset.
+    # Values in [0, 0.5]: 0.0 = exactly centred, 0.5 = on the pixel boundary.
+    offsets:
+      - [0.0, 0.0]
+      - [0.25, 0.25]
+      - [0.5, 0.0]
+      - [0.0, 0.5]
+      - [0.5, 0.5]
     # PSF rotation angle (radians). 0 = axis-aligned.
     angle: 0.0
     # PSF amplitude scale factor for this study.
@@ -144,6 +151,10 @@ studies:
     # Amplitude of injected background as a fraction of the PSF peak.
     background_amplitudes: [0.01, 0.1, 0.5]
     # Polynomial degrees used when fitting the background.
+    # The study iterates over these values, overriding fitting.bkgnd_degree for
+    # each run.  When bkgnd_degrees_with_null is true the null (no background
+    # fitting) case is prepended so every degree in this list is compared against
+    # the no-background-model baseline.
     bkgnd_degrees: [0, 1, 2]
     # If true, also test bkgnd_degree=null (no background fitting).
     bkgnd_degrees_with_null: true
@@ -154,7 +165,12 @@ studies:
     background_types: [none, constant, linear, quadratic, noisy_constant]
     box_size: 21
     sigma: [1.0, 1.0]
-    offset: [0.25, 0.25]
+    # List of [offset_y, offset_x] pairs (fractional pixel offsets from pixel centre).
+    # Each entry produces a separate set of heatmap plots labelled by its offset.
+    offsets:
+      - [0.0, 0.0]
+      - [0.25, 0.25]
+      - [0.5, 0.5]
 
   # Study 7: How SNR affects position, sigma, and scale recovery accuracy.
   noise_sensitivity:
@@ -168,6 +184,9 @@ studies:
     # Noise realizations per (snr, sigma) combination.
     noise_samples: 50
     box_size: 21
+    # Note: offsets are randomized uniformly in [-0.5, 0.5] per trial to
+    # avoid bias from a fixed sub-pixel position.  Angle is always 0.0
+    # (axis-aligned PSF) in this study.
 
   # Study 8: How num_sigma rejection handles hot pixels at various contamination levels.
   hot_pixel_rejection:
@@ -175,6 +194,9 @@ studies:
     # Numbers of hot pixels to inject.
     num_hot_pixels: [0, 1, 3, 5, 10]
     # num_sigma thresholds for PSF-stage bad pixel rejection.
+    # These values override fitting.num_sigma for the PSF-fit bad-pixel
+    # rejection stage.  The study iterates over num_sigma_values (and over
+    # null when num_sigma_with_null is true) to test rejection aggressiveness.
     num_sigma_values: [2.0, 3.0, 5.0]
     # If true, also test with num_sigma=null (rejection disabled).
     num_sigma_with_null: true

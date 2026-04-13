@@ -63,7 +63,7 @@ class StudyBoxVsSigmaConfig:
     enabled: bool
     box_sizes: list[int]
     sigmas: list[float]
-    offset: tuple[float, float]
+    offsets: list[tuple[float, float]]
     angle: float
     scale: float
     fitting: FittingConfig
@@ -135,7 +135,7 @@ class StudyBackgroundConfig:
     background_types: list[str]
     box_size: int
     sigma: tuple[float, float]
-    offset: tuple[float, float]
+    offsets: list[tuple[float, float]]
     fitting: FittingConfig
 
 
@@ -252,7 +252,10 @@ def _load_raw(path: pathlib.Path | None) -> dict[str, Any]:
         importlib.resources.as_file(pkg_ref) as defaults_path,
         defaults_path.open('r', encoding='utf-8') as fh,
     ):
-        raw: dict[str, Any] = yaml.safe_load(fh)
+        try:
+            raw: dict[str, Any] = yaml.safe_load(fh)
+        except yaml.YAMLError as exc:
+            raise ValueError(f'Failed to parse defaults.yaml: {exc}') from exc
 
     if path is not None:
         if not path.exists():
@@ -278,6 +281,7 @@ def _parse_fitting(raw: dict[str, Any]) -> FittingConfig:
 
     Raises:
         ValueError: If required keys are missing or values are out of range.
+        KeyError: If a required YAML key is absent from ``raw``.
     """
     bkgnd_ic = raw['bkgnd_ignore_center']
     search_lim = raw['search_limit']
@@ -369,8 +373,6 @@ def _build_config(raw: dict[str, Any]) -> Config:
     # Study 4: build angle list from steps
     sa_raw = studies['sigma_asymmetry_angle']
     angle_steps: int = int(sa_raw['angle_steps'])
-    if angle_steps < 2:
-        raise ValueError(f'angle_steps must be >= 2, got {angle_steps}')
 
     # Study 6: parse list of ignore-center pairs
     bg_raw = studies['background']
@@ -402,7 +404,7 @@ def _build_config(raw: dict[str, Any]) -> Config:
                 enabled=bool(studies['box_vs_sigma']['enabled']),
                 box_sizes=[int(x) for x in studies['box_vs_sigma']['box_sizes']],
                 sigmas=[float(x) for x in studies['box_vs_sigma']['sigmas']],
-                offset=_parse_two_floats(studies['box_vs_sigma']['offset']),
+                offsets=[_parse_two_floats(o) for o in studies['box_vs_sigma']['offsets']],
                 angle=float(studies['box_vs_sigma']['angle']),
                 scale=float(studies['box_vs_sigma']['scale']),
                 fitting=study_fitting('box_vs_sigma'),
@@ -454,7 +456,7 @@ def _build_config(raw: dict[str, Any]) -> Config:
                 background_types=[str(x) for x in bg_raw['background_types']],
                 box_size=int(bg_raw['box_size']),
                 sigma=_parse_two_floats(bg_raw['sigma']),
-                offset=_parse_two_floats(bg_raw['offset']),
+                offsets=[_parse_two_floats(o) for o in bg_raw['offsets']],
                 fitting=study_fitting('background'),
             ),
             noise_sensitivity=StudyNoiseSensitivityConfig(
@@ -539,6 +541,24 @@ def _validate_config(cfg: Config) -> None:
             raise ValueError(
                 f'box_vs_sigma.box_sizes: each entry must be an odd integer >= 5, got {bs}'
             )
+    if len(bvs.offsets) == 0:
+        raise ValueError('box_vs_sigma.offsets must contain at least one entry')
+
+    def _check_box_size(field: str, bs: int) -> None:
+        if bs < 5 or bs % 2 == 0:
+            raise ValueError(
+                f'{field}: box_size must be an odd integer >= 5, got {bs}'
+            )
+
+    _check_box_size('subpixel_offset.box_size', cfg.studies.subpixel_offset.box_size)
+    _check_box_size(
+        'min_detectable_offset.box_size', cfg.studies.min_detectable_offset.box_size
+    )
+    _check_box_size('sigma_asymmetry_angle.box_size', cfg.studies.sigma_asymmetry_angle.box_size)
+    _check_box_size('constraint_modes.box_size', cfg.studies.constraint_modes.box_size)
+    _check_box_size('background.box_size', cfg.studies.background.box_size)
+    _check_box_size('noise_sensitivity.box_size', cfg.studies.noise_sensitivity.box_size)
+    _check_box_size('hot_pixel_rejection.box_size', cfg.studies.hot_pixel_rejection.box_size)
 
     mdo = cfg.studies.min_detectable_offset
     for delta in mdo.delta_offsets:
@@ -549,8 +569,12 @@ def _validate_config(cfg: Config) -> None:
     lo, hi = ns.snr_log_range
     if lo >= hi:
         raise ValueError(f'noise_sensitivity.snr_log_range: min ({lo}) must be < max ({hi})')
+    if ns.snr_steps < 1:
+        raise ValueError(f'noise_sensitivity.snr_steps must be >= 1, got {ns.snr_steps}')
 
     sa = cfg.studies.sigma_asymmetry_angle
+    if sa.angle_steps < 2:
+        raise ValueError(f'angle_steps must be >= 2, got {sa.angle_steps}')
     for ratio in sa.sigma_ratios:
         if ratio <= 0:
             raise ValueError(f'sigma_asymmetry_angle.sigma_ratios: must be positive, got {ratio}')
@@ -568,6 +592,8 @@ def _validate_config(cfg: Config) -> None:
                 f'background.background_types: unknown type "{bt}". '
                 f'Valid options: {sorted(valid_bkgnd_types)}'
             )
+    if len(cfg.studies.background.offsets) == 0:
+        raise ValueError('background.offsets must contain at least one entry')
 
 
 def config_to_dict(cfg: Config) -> dict[str, Any]:

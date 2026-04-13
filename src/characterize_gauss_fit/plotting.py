@@ -16,6 +16,7 @@ import pathlib
 from collections.abc import Sequence
 
 import matplotlib
+import matplotlib.patheffects as _pe
 import numpy as np
 import numpy.typing as npt
 
@@ -29,6 +30,36 @@ _SAVE_DPI = 150
 
 # Colour used to mark cells / points where the fitter did not converge.
 _FAIL_COLOUR = '#cccccc'
+
+# Path effects applied to heatmap cell annotations so text is readable on any
+# background colour.
+_HEATMAP_TEXT_EFFECTS = [_pe.withStroke(linewidth=3, foreground='white')]
+
+# Text automatically appended to every line-with-bands plot explaining the
+# shaded confidence region.
+_BANDS_NOTE = 'Shaded bands: mean \u00b1 1 std.\u202fdev. across repeated trials'
+
+# Style used for all figure footnotes.
+_NOTE_STYLE: dict[str, object] = {
+    'ha': 'center', 'va': 'bottom', 'fontsize': 7, 'color': '#555555', 'style': 'italic',
+    'transform': None,  # overridden per-call with fig.transFigure
+}
+
+
+def _add_figure_note(fig: Figure, note: str, *, bottom: float = 0.12) -> None:
+    """Render ``note`` as a small italic footnote at the bottom of ``fig``.
+
+    Reserves bottom margin so the note does not overlap plot content.
+
+    Parameters:
+        fig: The figure to annotate.
+        note: Text to display.  May contain newlines.
+        bottom: Fraction of figure height reserved for the note.
+    """
+    kw = dict(_NOTE_STYLE)
+    kw['transform'] = fig.transFigure
+    fig.text(0.5, 0.01, note, **kw)  # type: ignore[arg-type]
+    fig.subplots_adjust(bottom=bottom)
 
 
 def save_figure(fig: Figure, output_dir: pathlib.Path, filename: str) -> pathlib.Path:
@@ -61,6 +92,7 @@ def plot_heatmap(
     log_scale: bool = False,
     mask: npt.NDArray[np.bool_] | None = None,
     annotate: bool = True,
+    note: str = '',
 ) -> Figure:
     """Create a 2-D heatmap (imshow) with optional log scaling and a fail mask.
 
@@ -76,6 +108,8 @@ def plot_heatmap(
         mask: Boolean array of the same shape as ``data``. Masked cells (``True``)
             are displayed in :data:`_FAIL_COLOUR` to indicate non-convergence.
         annotate: If ``True``, write the numeric value in each cell.
+        note: Optional assumptions/context string rendered as a small italic
+            footnote at the bottom of the figure.
 
     Returns:
         A :class:`matplotlib.figure.Figure`.
@@ -116,8 +150,13 @@ def plot_heatmap(
                     text = f'{10**val:.2e}'
                 else:
                     text = f'{val:.3f}'
-                ax.text(col, row, text, ha='center', va='center', fontsize=6)
+                ax.text(
+                    col, row, text, ha='center', va='center', fontsize=6,
+                    path_effects=_HEATMAP_TEXT_EFFECTS,
+                )
 
+    if note:
+        _add_figure_note(fig, note, bottom=0.10)
     return fig
 
 
@@ -132,6 +171,7 @@ def plot_line_with_bands(
     ylabel: str,
     log_x: bool = False,
     log_y: bool = False,
+    note: str = '',
 ) -> Figure:
     """Create a multi-series line plot with shaded mean +/- 1 std bands.
 
@@ -145,6 +185,8 @@ def plot_line_with_bands(
         ylabel: Y-axis label.
         log_x: If ``True``, use a log scale for the X axis.
         log_y: If ``True``, use a log scale for the Y axis.
+        note: Optional study-specific assumptions string.  It is combined with
+            the automatic shaded-band explanation and rendered as a footnote.
 
     Returns:
         A :class:`matplotlib.figure.Figure`.
@@ -154,7 +196,10 @@ def plot_line_with_bands(
     for y_mean, y_std, label in zip(y_means, y_stds, labels, strict=True):
         (line,) = ax.plot(x, y_mean, label=label, marker='o', markersize=3)
         colour = line.get_color()
-        lower = np.maximum(y_mean - y_std, 1e-15 if log_y else y_mean - y_std)
+        if log_y:
+            lower = np.maximum(y_mean - y_std, 1e-15)
+        else:
+            lower = y_mean - y_std
         upper = y_mean + y_std
         ax.fill_between(x, lower, upper, alpha=0.2, color=colour)
 
@@ -173,6 +218,8 @@ def plot_line_with_bands(
     ax.legend(fontsize=8)
     ax.grid(visible=True, which='both', alpha=0.3)
 
+    full_note = f'{_BANDS_NOTE}  |  {note}' if note else _BANDS_NOTE
+    _add_figure_note(fig, full_note, bottom=0.12)
     return fig
 
 
@@ -209,9 +256,12 @@ def plot_grouped_bars(
     for g_idx, g_label in enumerate(group_labels):
         offsets = x + (g_idx - (n_groups - 1) / 2.0) * width
         bar_vals = values[:, g_idx].astype(float)
-        # Replace NaN with 0 for display (annotate later).
-        display_vals = np.where(np.isnan(bar_vals), 0.0, bar_vals)
+        nan_mask = np.isnan(bar_vals)
+        display_vals = np.where(nan_mask, 0.0, bar_vals)
         ax.bar(offsets, display_vals, width=width * 0.9, label=g_label)
+        for _cat_i, (off, is_nan) in enumerate(zip(offsets, nan_mask, strict=True)):
+            if is_nan:
+                ax.text(off, 0.0, 'NaN', ha='center', va='bottom', fontsize=5, rotation=90)
 
     ax.set_xticks(x)
     ax.set_xticklabels(categories, rotation=30, ha='right', fontsize=8)
@@ -279,11 +329,17 @@ def plot_multi_panel_heatmaps(
     cmap.set_bad(color=_FAIL_COLOUR)
     img_ref = None
 
+    if mask_panels is not None and len(mask_panels) != len(data_panels):
+        raise ValueError(
+            f'mask_panels length ({len(mask_panels)}) must equal '
+            f'data_panels length ({len(data_panels)})'
+        )
+
     for p_idx, (ax, display, ptitle) in enumerate(
         zip(axes, all_display, panel_titles, strict=True)
     ):
         panel_display = display.copy()
-        if mask_panels is not None and p_idx < len(mask_panels):
+        if mask_panels is not None:
             panel_display = np.where(mask_panels[p_idx], np.nan, panel_display)
 
         img = ax.imshow(
@@ -321,6 +377,7 @@ def plot_recovery_fraction_heatmap(
     title: str,
     xlabel: str,
     ylabel: str,
+    note: str = '',
 ) -> Figure:
     """Create a heatmap of recovery fractions in [0, 1] with white-to-green scale.
 
@@ -335,6 +392,8 @@ def plot_recovery_fraction_heatmap(
         title: Figure title.
         xlabel: X-axis label.
         ylabel: Y-axis label.
+        note: Optional assumptions/context string rendered as a small italic
+            footnote at the bottom of the figure.
 
     Returns:
         A :class:`matplotlib.figure.Figure`.
@@ -345,7 +404,7 @@ def plot_recovery_fraction_heatmap(
     img = ax.imshow(
         recovery_fractions,
         aspect='auto',
-        cmap='RdYlGn',
+        cmap='Greens',
         origin='upper',
         vmin=0.0,
         vmax=1.0,
@@ -364,8 +423,17 @@ def plot_recovery_fraction_heatmap(
     for row in range(n_rows):
         for col in range(n_cols):
             val = recovery_fractions[row, col]
-            ax.text(col, row, f'{val:.2f}', ha='center', va='center', fontsize=6)
+            if np.isnan(val):
+                text = 'N/C'
+            else:
+                text = f'{val:.2f}'
+            ax.text(
+                col, row, text, ha='center', va='center', fontsize=6,
+                path_effects=_HEATMAP_TEXT_EFFECTS,
+            )
 
+    if note:
+        _add_figure_note(fig, note, bottom=0.10)
     return fig
 
 
@@ -380,6 +448,7 @@ def plot_constraint_summary(
     angle_err_vals: npt.NDArray[np.float64],
     *,
     title: str,
+    note: str = '',
 ) -> Figure:
     """Create a 6-panel grouped bar chart for Study 5 constraint modes.
 
@@ -395,8 +464,10 @@ def plot_constraint_summary(
         pos_err_x_vals: ``(n_cat, n_groups)`` absolute X-axis position error.
         scale_err_vals: ``(n_cat, n_groups)`` relative scale error array.
         sigma_y_err_vals: ``(n_cat, n_groups)`` relative sigma_y error array.
-        angle_err_vals: ``(n_cat, n_groups)`` absolute angle error array (rad).
+        angle_err_vals: ``(n_cat, n_groups)`` absolute angle error array (degrees).
         title: Overall figure title.
+        note: Optional assumptions/context string rendered as a small italic
+            footnote at the bottom of the figure.
 
     Returns:
         A :class:`matplotlib.figure.Figure`.
@@ -408,7 +479,7 @@ def plot_constraint_summary(
         (axes[0, 2], pos_err_x_vals,  '|pos_err_x| (pixels)'),
         (axes[1, 0], scale_err_vals,  'Relative scale error'),
         (axes[1, 1], sigma_y_err_vals, 'Relative sigma_y error'),
-        (axes[1, 2], angle_err_vals,  'Angle error (radians)'),
+        (axes[1, 2], angle_err_vals,  'Angle error (\u00b0)'),
     ]
 
     n_cat = len(categories)
@@ -420,8 +491,14 @@ def plot_constraint_summary(
         for g_idx, g_label in enumerate(group_labels):
             offsets = x + (g_idx - (n_groups - 1) / 2.0) * width
             bar_vals = vals[:, g_idx].astype(float)
-            display_vals = np.where(np.isnan(bar_vals), 0.0, bar_vals)
+            nan_mask = np.isnan(bar_vals)
+            display_vals = np.where(nan_mask, 0.0, bar_vals)
             ax.bar(offsets, display_vals, width=width * 0.9, label=g_label)
+            for off, is_nan in zip(offsets, nan_mask, strict=True):
+                if is_nan:
+                    ax.text(
+                        off, 0.0, 'NaN', ha='center', va='bottom', fontsize=5, rotation=90
+                    )
         ax.set_xticks(x)
         ax.set_xticklabels(categories, rotation=30, ha='right', fontsize=7)
         ax.set_ylabel(metric_label, fontsize=8)
@@ -429,4 +506,6 @@ def plot_constraint_summary(
         ax.grid(visible=True, axis='y', alpha=0.3)
 
     fig.suptitle(title, fontsize=10)
+    if note:
+        _add_figure_note(fig, note, bottom=0.08)
     return fig

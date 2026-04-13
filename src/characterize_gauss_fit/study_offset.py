@@ -27,6 +27,13 @@ from characterize_gauss_fit.trial import TrialResult, TrialSpec
 _LOG = logging.getLogger(__name__)
 _STUDY_NAME = 'subpixel_offset'
 
+# Shared grouping key definitions for JSON summary and _write_outputs.
+_GROUP_KEYS: list[Any] = [
+    ('sigma', lambda s: s.sigma_y),
+    ('offset_y', lambda s: round(s.offset_y, 6)),
+    ('offset_x', lambda s: round(s.offset_x, 6)),
+]
+
 
 def build_specs(cfg: Config) -> list[TrialSpec]:
     """Build trial specs for Study 2.
@@ -44,7 +51,7 @@ def build_specs(cfg: Config) -> list[TrialSpec]:
     study = cfg.studies.subpixel_offset
     offsets = np.linspace(study.offset_range[0], study.offset_range[1], study.offset_steps)
     specs: list[TrialSpec] = []
-    seed = 2000
+    seed = 2000  # seed range 2000+ reserved for this study to avoid RNG seed collisions
     for sigma in study.sigmas:
         for oy in offsets:
             for ox in offsets:
@@ -146,11 +153,16 @@ def _write_outputs(
                 cbar_label='log10(error)',
                 log_scale=True,
                 mask=fail_mask,
+                note=(
+                    f'box_size={study.box_size}, angle={study.angle:.1f}\u00b0, '
+                    f'no background, noiseless'
+                ),
             )
-            save_figure(fig, study_dir, fname)
+            save_figure(fig, study_dir, f'{_STUDY_NAME}_{fname}')
 
     # Line plots: error vs offset_x at fixed offset_y (midpoint row), and
     # error vs offset_y at fixed offset_x (midpoint column).
+    # mid_idx selects the midpoint of the configured offset range (n_off // 2).
     mid_idx = n_off // 2
     x_arr = np.array(offsets)
 
@@ -193,19 +205,19 @@ def _write_outputs(
             xlabel=f'{vary_axis} (pixels)',
             ylabel=metric_label,
             log_y=True,
+            note=(
+                f'box_size={study.box_size}, angle={study.angle:.1f}\u00b0, '
+                f'no background, noiseless'
+            ),
         )
-        save_figure(fig, study_dir, fname_line)
+        save_figure(fig, study_dir, f'{_STUDY_NAME}_{fname_line}')
 
     write_csv(cfg.output_dir, _STUDY_NAME, specs, results)
 
     groups = utils.build_groups_by_keys(
         specs,
         results,
-        [
-            ('sigma', lambda s: s.sigma_y),
-            ('offset_y', lambda s: round(s.offset_y, 6)),
-            ('offset_x', lambda s: round(s.offset_x, 6)),
-        ],
+        _GROUP_KEYS,
     )
     write_json_summary(
         cfg.output_dir,
@@ -231,9 +243,5 @@ def build_json_groups(specs: list[TrialSpec], results: list[TrialResult]) -> lis
     return utils.build_groups_by_keys(
         specs,
         results,
-        [
-            ('sigma', lambda s: s.sigma_y),
-            ('offset_y', lambda s: round(s.offset_y, 6)),
-            ('offset_x', lambda s: round(s.offset_x, 6)),
-        ],
+        _GROUP_KEYS,
     )

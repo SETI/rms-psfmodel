@@ -19,7 +19,7 @@ import numpy as np
 import numpy.typing as npt
 
 from characterize_gauss_fit import _study_utils as utils
-from characterize_gauss_fit.config import Config, config_to_dict
+from characterize_gauss_fit.config import Config, StudyMinDetectableOffsetConfig, config_to_dict
 from characterize_gauss_fit.executor import run_trials
 from characterize_gauss_fit.output import write_csv, write_json_summary
 from characterize_gauss_fit.plotting import (
@@ -36,23 +36,42 @@ _STUDY_NAME = 'min_detectable_offset'
 _NOISELESS_LABEL = 'noiseless'
 
 
+def _build_conditions(
+    study: StudyMinDetectableOffsetConfig, scale: float
+) -> list[tuple[float, str]]:
+    """Build the list of noise conditions for Study 3.
+
+    Parameters:
+        study: The study configuration.
+        scale: PSF amplitude scale factor.
+
+    Returns:
+        List of ``(noise_rms, label)`` pairs ordered as noiseless-first then
+        per-SNR.
+    """
+    conditions: list[tuple[float, str]] = []
+    if study.include_noiseless:
+        conditions.append((0.0, _NOISELESS_LABEL))
+    for snr_val in study.snr_values:
+        conditions.append((_snr_to_noise_rms(snr_val, scale), f'snr_{snr_val:.0f}'))
+    return conditions
+
+
 def _snr_to_noise_rms(snr: float, scale: float) -> float:
     """Convert SNR (peak / noise_rms) to noise_rms.
 
     Parameters:
-        snr: Signal-to-noise ratio (PSF peak / noise std).
+        snr: Signal-to-noise ratio (PSF peak / noise std). Must be positive.
         scale: PSF amplitude scale factor (determines peak value).
 
     Returns:
         Corresponding noise standard deviation.
+
+    Raises:
+        ValueError: If ``snr`` is not positive.
     """
-    # PSF peak for a unit Gaussian integrated over a pixel is approximately
-    # scale * gaussian_peak, but we use scale as the amplitude directly since
-    # eval_rect is normalised. A reasonable approximation for typical sigmas
-    # is peak ~ scale * 0.16 (for sigma=1). To avoid sigma dependence we set
-    # noise_rms = scale / snr, which equals SNR = peak only when sigma is large
-    # enough that the peak pixel captures most of the flux. This is consistent
-    # with how study_noise.py treats SNR.
+    if snr <= 0:
+        raise ValueError(f'snr must be > 0, got {snr}')
     return scale / snr
 
 
@@ -75,11 +94,7 @@ def build_specs(cfg: Config) -> list[TrialSpec]:
     seed = 3000
 
     # Noise conditions: (noise_rms, snr_label) pairs.
-    conditions: list[tuple[float, str]] = []
-    if study.include_noiseless:
-        conditions.append((0.0, _NOISELESS_LABEL))
-    for snr_val in study.snr_values:
-        conditions.append((_snr_to_noise_rms(snr_val, scale), f'snr_{snr_val:.0f}'))
+    conditions = _build_conditions(study, scale)
 
     for delta in study.delta_offsets:
         for sigma in study.sigmas:
@@ -152,13 +167,12 @@ def _write_outputs(
     deltas = study.delta_offsets
     sigmas = study.sigmas
 
-    conditions: list[tuple[float, str]] = []
-    if study.include_noiseless:
-        conditions.append((0.0, _NOISELESS_LABEL))
-    for snr_val in study.snr_values:
-        conditions.append((_snr_to_noise_rms(snr_val, scale), f'snr_{snr_val:.0f}'))
+    conditions = _build_conditions(study, scale)
 
     # Map (delta, sigma, condition_label) -> list of TrialResult.
+    # Slicing by index is safe here because build_specs generates specs in the
+    # same deterministic order (delta, sigma, condition, trial_idx) and
+    # run_trials preserves spec ordering.
     result_map: dict[tuple[float, float, str], list[TrialResult]] = {}
     idx = 0
     for delta in deltas:
@@ -168,6 +182,9 @@ def _write_outputs(
                 bucket_key = (delta, sigma, cond_label)
                 result_map[bucket_key] = results[idx : idx + n_trials]
                 idx += n_trials
+    assert idx == len(results), (
+        f'result_map bucketing consumed {idx} results but {len(results)} were returned'
+    )
 
     x_arr = np.array(deltas)
     delta_labels = [f'{d:.3g}' for d in deltas]
@@ -211,13 +228,18 @@ def _write_outputs(
                 y_means,
                 y_stds,
                 labels=line_labels,
-                title=f'Min detectable offset -- {cond_label}',
+                title=f'Min detectable offset ({metric_label}) -- {cond_label}',
                 xlabel='Injected offset delta (pixels)',
                 ylabel=metric_label,
                 log_x=True,
                 log_y=True,
+                note=(
+                    f'box_size={study.box_size}, '
+                    f'{study.noise_samples} noise samples/condition, '
+                    f'offset varies as (\u03b4, \u03b4)'
+                ),
             )
-            save_figure(fig, study_dir, f'{fname_prefix}_{cond_label}.png')
+            save_figure(fig, study_dir, f'{_STUDY_NAME}_{fname_prefix}_{cond_label}.png')
 
     # Recovery fraction heatmap: one per SNR condition (skip noiseless).
     for noise_rms, cond_label in conditions:
@@ -236,8 +258,13 @@ def _write_outputs(
             title=f'Recovery fraction -- {cond_label}',
             xlabel='Injected offset delta (pixels)',
             ylabel='Sigma (pixels)',
+            note=(
+                f'box_size={study.box_size}, '
+                f'{study.noise_samples} noise samples/condition, '
+                f'offset varies as (\u03b4, \u03b4)'
+            ),
         )
-        save_figure(fig, study_dir, f'recovery_{cond_label}.png')
+        save_figure(fig, study_dir, f'{_STUDY_NAME}_recovery_{cond_label}.png')
 
     write_csv(cfg.output_dir, _STUDY_NAME, specs, results)
 

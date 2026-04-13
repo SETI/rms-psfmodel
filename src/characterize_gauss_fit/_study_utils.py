@@ -25,6 +25,25 @@ from characterize_gauss_fit.trial import (
 )
 
 
+def offset_tag(offset_y: float, offset_x: float) -> str:
+    """Return a filename-safe tag encoding a (offset_y, offset_x) pair.
+
+    Decimal points are replaced with 'p' and negative signs with 'm', so
+    ``(0.25, 0.0)`` becomes ``'oy0p25_ox0p00'``.
+
+    Parameters:
+        offset_y: Y component of the offset (fractional pixels).
+        offset_x: X component of the offset (fractional pixels).
+
+    Returns:
+        A short ASCII string safe for use in file and directory names.
+    """
+    def _fmt(v: float) -> str:
+        return f'{v:.2f}'.replace('.', 'p').replace('-', 'm')
+
+    return f'oy{_fmt(offset_y)}_ox{_fmt(offset_x)}'
+
+
 def make_spec(
     *,
     sigma_y: float,
@@ -121,13 +140,12 @@ def progress_callback(study_name: str) -> Any:
     """
 
     def _callback(completed: int, total: int) -> None:
-        pct = 100 * completed // total
-        print(
-            f'\r  {study_name}: {completed}/{total} trials ({pct}%)   ',
-            end='',
-            flush=True,
-            file=sys.stderr,
-        )
+        if total > 0:
+            pct = 100 * completed // total
+            msg = f'\r  {study_name}: {completed}/{total} trials ({pct}%)   '
+        else:
+            msg = f'\r  {study_name}: {completed}/0 trials   '
+        print(msg, end='', flush=True, file=sys.stderr)
         if completed == total:
             print(file=sys.stderr)
 
@@ -152,13 +170,10 @@ def collect_metric(
     Raises:
         AttributeError: If ``metric`` is not a field of :class:`~trial.TrialResult`.
     """
-    values: list[float] = []
-    for r in results:
-        val = getattr(r, metric)
-        if val is None:
-            values.append(float('nan'))
-        else:
-            values.append(float(val))
+    values = [
+        float('nan') if getattr(r, metric) is None else float(getattr(r, metric))
+        for r in results
+    ]
     return np.array(values, dtype=np.float64)
 
 
@@ -201,7 +216,9 @@ def build_groups_by_keys(
 
     Parameters:
         specs: Ordered list of :class:`~trial.TrialSpec` objects.
-        results: Ordered list of :class:`~trial.TrialResult` objects.
+        results: Accepted for API symmetry with
+            :func:`~output.write_json_summary` but not used here; grouping
+            is based solely on ``specs`` and ``key_funcs``.
         key_funcs: List of ``(label, callable)`` pairs where the callable
             takes a :class:`~trial.TrialSpec` and returns the group key value.
 
@@ -227,7 +244,6 @@ def build_groups_by_keys(
         g['indices'] = indices
         groups.append(g)
 
-    _ = results  # used indirectly via indices in write_json_summary
     return groups
 
 

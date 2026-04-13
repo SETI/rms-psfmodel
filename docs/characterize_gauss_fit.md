@@ -133,7 +133,7 @@ a `fitting` subsection to override these for that study only.
 | `num_sigma` | float or null | `null` | Sigma-clipping threshold for PSF residuals (bad-pixel rejection). `null` = disabled. |
 | `max_bad_frac` | float | `0.2` | Maximum fraction of pixels that can be masked before the fit is abandoned. |
 | `allow_nonzero_base` | bool | `false` | Fit a constant base level in addition to the polynomial background. |
-| `use_angular_params` | bool | `true` | Reparametrise fit variables as angles for bounded optimisation. |
+| `use_angular_params` | bool | `true` | Reparametrise fit variables as angles for bounded optimization. |
 | `tolerance` | float | `1e-6` | Powell optimiser convergence tolerance. |
 | `search_limit` | [float, float] | `[1.5, 1.5]` | Maximum allowed position offset from the starting point [y, x] in pixels. |
 | `scale_limit` | float | `1000.0` | Maximum allowed PSF amplitude scale factor. |
@@ -338,6 +338,25 @@ One row per trial. Columns:
 - Failed / non-converged trials have `NaN` for all error fields.
 - Load with `pandas.read_csv(..., na_values=['NaN', ''])`.
 
+> **Naming asymmetry warning.** Two pairs of columns have similar names but
+> opposite roles:
+>
+> - `fit_sigma_y` / `fit_sigma_x` are **inputs** (the value sigma was
+>   *constrained to* before fitting; empty string when sigma was left to float).
+> - `sigma_y_fit` / `sigma_x_fit` are **outputs** (the sigma value *returned
+>   by the fitter*; empty string when sigma was fixed and not fitted).
+>
+> In short: `fit_*` columns describe what you told the fitter; `*_fit` columns
+> describe what the fitter found.
+>
+> Example (Python / pandas):
+>
+> ```python
+> # Trials where sigma_y was constrained (input column non-empty):
+> constrained = df[df['fit_sigma_y'].notna()]
+> # Trials where sigma_y was floated and a fitted value was returned:
+> fitted = df[df['sigma_y_fit'].notna()]
+> ```
 ### `summary.json`
 
 ```json
