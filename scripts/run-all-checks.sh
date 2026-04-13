@@ -89,12 +89,12 @@ SCOPE_SPECIFIED=false
 # Per-check defaults (override by exporting before invoking this script, or
 # permanently change here)
 : "${ENABLE_RUFF_CHECK:=true}"
-: "${ENABLE_RUFF_FORMAT:=false}"
-: "${ENABLE_MYPY:=false}"
+: "${ENABLE_RUFF_FORMAT:=true}"
+: "${ENABLE_MYPY:=true}"
 : "${ENABLE_PYTEST:=true}"
 : "${ENABLE_PYROMA:=true}"
-: "${ENABLE_BANDIT:=false}"
-: "${ENABLE_VULTURE:=false}"
+: "${ENABLE_BANDIT:=true}"
+: "${ENABLE_VULTURE:=true}"
 : "${ENABLE_SPHINX:=true}"
 : "${ENABLE_PYMARKDOWN:=true}"
 
@@ -386,10 +386,11 @@ run_code_checks() {
     fi
 
     # -n controls parallelism; --dist loadscope keeps each test module on one
-    # worker to avoid time-mocking and fixture-isolation interference
+    # worker to avoid time-mocking and fixture-isolation interference.
+    # Coverage (--cov=psfmodel) and strict options come from pyproject.toml addopts.
     if [ "$RUN_PYTEST" = true ] && [ "$ENABLE_PYTEST" = true ]; then
         print_info "Running pytest (-n ${PYTEST_WORKERS})..."
-        if python -m pytest --cov=src -q -n "$PYTEST_WORKERS" --dist loadscope tests; then
+        if python -m pytest -q -n "$PYTEST_WORKERS" --dist loadscope tests; then
             print_success "Pytest passed"
         else
             print_error "Pytest failed"
@@ -411,7 +412,7 @@ run_code_checks() {
 
     if [ "$RUN_BANDIT" = true ] && [ "$ENABLE_BANDIT" = true ]; then
         print_info "Running bandit..."
-        if python -m bandit -r src -q; then
+        if python -m bandit -c pyproject.toml -r src -q; then
             print_success "Bandit passed"
         else
             print_error "Bandit failed"

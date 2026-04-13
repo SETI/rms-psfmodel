@@ -206,7 +206,8 @@ class PSF(ABC):
                 total_rect = rect
             else:
                 total_rect += rect
-        assert total_rect is not None
+        if total_rect is None:
+            raise RuntimeError('Motion smear loop produced no PSF rectangles')
 
         total_rect /= float(num_steps + 1)
 

@@ -274,10 +274,13 @@ class GaussianPSF(PSF):
 
         Returns:
             The integral of the Gaussian between xmin and xmax.
+
+        Raises:
+            ValueError: If ``sigma`` is not positive.
         """
 
-        # Normalize xmin and xmax
-        assert sigma > 0.0
+        if not sigma > 0.0:
+            raise ValueError(f'sigma must be positive, got {sigma}')
         xmin_div_sqrt_2 = (x_min - mean) * (INV_SQRT_2 / sigma)
         xmax_div_sqrt_2 = (x_max - mean) * (INV_SQRT_2 / sigma)
 

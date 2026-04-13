@@ -72,7 +72,7 @@ jobs:
 
       - name: Test with coverage
         run: |
-          python -m pytest --cov=src -n auto tests
+          python -m pytest --cov=psfmodel -n auto tests
 
       - name: Print coverage report
         run: |

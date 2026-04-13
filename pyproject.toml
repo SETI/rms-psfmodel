@@ -49,7 +49,14 @@ Issues = "https://github.com/SETI/psfmodel/issues"
 pythonpath = [
   "src"
 ]
-addopts = ["-n", "4", "--cov=src"]
+testpaths = ["tests"]
+addopts = ["-n", "4", "--cov=psfmodel", "--strict-markers", "--strict-config"]
+filterwarnings = [
+    # xdist controller process runs no tests; coverage still warns there even
+    # though workers collect data (see pytest-cov / coverage issues).
+    "ignore:No data was collected\\.:coverage.exceptions.CoverageWarning",
+]
+markers = []
 
 [tool.setuptools]
 [tool.setuptools.packages.find]
@@ -72,9 +79,9 @@ dev = [
   "pytest-cov>=4.0",
   "pytest-xdist>=3.8.0",
   "ruff>=0.8",
-  # "bandit[toml]>=1.8",
+  "bandit[toml]>=1.8",
   "pyroma>=4.2",
-  # "vulture>=2.14",
+  "vulture>=2.14",
   "psfmodel[docs]",
 ]
 docs = [
@@ -91,8 +98,9 @@ docs = [
 
 [tool.coverage.run]
 branch = true
-source = ["src"]
-omit = ["tests/*", "_version.py", "src/psfmodel/hst.py"]
+parallel = true
+source = ["psfmodel"]
+omit = ["tests/*", "**/_version.py", "**/psfmodel/hst.py"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -100,7 +108,7 @@ exclude_lines = [
   "def __repr__",
   "raise NotImplementedError",
 ]
-fail_under = 40
+fail_under = 90
 
 [tool.pyright]
 # Legacy module; same exclusion as mypy/ruff until modernized.
@@ -127,6 +135,8 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = [
+  "conftest",
+  "test_find_position",
   "test_gaussian",
   "test_psf",
 ]
@@ -166,12 +176,11 @@ enabled = false
 # Inline HTML (e.g. <br>) allowed in Markdown.
 enabled = false
 
-# Uncomment when enabling bandit in [project.optional-dependencies].dev.
-# [tool.bandit]
-# exclude_dirs = ["tests", "venv", ".venv"]
-# targets = ["src"]
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv", "src/psfmodel/hst.py"]
+targets = ["src"]
 
-# Uncomment when enabling vulture in [project.optional-dependencies].dev.
-# [tool.vulture]
-# paths = ["src"]
-# exclude = ["tests/"]
+[tool.vulture]
+paths = ["src"]
+exclude = ["tests/", "src/psfmodel/hst.py"]
+min_confidence = 70
