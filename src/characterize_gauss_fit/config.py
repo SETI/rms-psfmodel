@@ -546,14 +546,10 @@ def _validate_config(cfg: Config) -> None:
 
     def _check_box_size(field: str, bs: int) -> None:
         if bs < 5 or bs % 2 == 0:
-            raise ValueError(
-                f'{field}: box_size must be an odd integer >= 5, got {bs}'
-            )
+            raise ValueError(f'{field}: box_size must be an odd integer >= 5, got {bs}')
 
     _check_box_size('subpixel_offset.box_size', cfg.studies.subpixel_offset.box_size)
-    _check_box_size(
-        'min_detectable_offset.box_size', cfg.studies.min_detectable_offset.box_size
-    )
+    _check_box_size('min_detectable_offset.box_size', cfg.studies.min_detectable_offset.box_size)
     _check_box_size('sigma_asymmetry_angle.box_size', cfg.studies.sigma_asymmetry_angle.box_size)
     _check_box_size('constraint_modes.box_size', cfg.studies.constraint_modes.box_size)
     _check_box_size('background.box_size', cfg.studies.background.box_size)

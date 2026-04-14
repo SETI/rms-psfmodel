@@ -45,7 +45,11 @@ _BANDS_NOTE = 'Shaded bands: mean \u00b1 1 std.\u202fdev. across repeated trials
 
 # Style used for all figure footnotes.
 _NOTE_STYLE: dict[str, object] = {
-    'ha': 'center', 'va': 'bottom', 'fontsize': 7, 'color': '#555555', 'style': 'italic',
+    'ha': 'center',
+    'va': 'bottom',
+    'fontsize': 7,
+    'color': '#555555',
+    'style': 'italic',
     'transform': None,  # overridden per-call with fig.transFigure
 }
 
@@ -74,7 +78,7 @@ def _add_figure_note(fig: Figure, note: str, *, bottom: float = 0.12) -> None:
     fig.text(0.5, 0.005, note, **kw)  # type: ignore[arg-type]
     # Single tight_layout call: everything (axes + labels) goes in the rect
     # above the note strip, so x-axis title never overlaps the note.
-    fig.tight_layout(rect=[0.0, actual_bottom, 1.0, 1.0])
+    fig.tight_layout(rect=(0.0, actual_bottom, 1.0, 1.0))
 
 
 def save_figure(fig: Figure, output_dir: pathlib.Path, filename: str) -> pathlib.Path:
@@ -131,9 +135,7 @@ def plot_heatmap(
     n_rows, n_cols = data.shape
     # Extra height (+1.2) reserves room for the title and the footnote without
     # either being clipped.  tight_layout() further adjusts subplot margins.
-    fig, ax = plt.subplots(
-        figsize=(max(7, n_cols * 0.9 + 1), max(5.5, n_rows * 0.7 + 1.2))
-    )
+    fig, ax = plt.subplots(figsize=(max(7, n_cols * 0.9 + 1), max(5.5, n_rows * 0.7 + 1.2)))
 
     display = data.astype(float)
     if log_scale:
@@ -169,7 +171,12 @@ def plot_heatmap(
                 else:
                     text = f'{val:.3f}'
                 ax.text(
-                    col, row, text, ha='center', va='center', fontsize=6,
+                    col,
+                    row,
+                    text,
+                    ha='center',
+                    va='center',
+                    fontsize=6,
                     path_effects=_HEATMAP_TEXT_EFFECTS,
                 )
 
@@ -420,9 +427,7 @@ def plot_recovery_fraction_heatmap(
         A :class:`matplotlib.figure.Figure`.
     """
     n_rows, n_cols = recovery_fractions.shape
-    fig, ax = plt.subplots(
-        figsize=(max(7, n_cols * 0.9 + 1), max(5.5, n_rows * 0.7 + 1.2))
-    )
+    fig, ax = plt.subplots(figsize=(max(7, n_cols * 0.9 + 1), max(5.5, n_rows * 0.7 + 1.2)))
 
     img = ax.imshow(
         recovery_fractions,
@@ -451,7 +456,12 @@ def plot_recovery_fraction_heatmap(
             else:
                 text = f'{val:.2f}'
             ax.text(
-                col, row, text, ha='center', va='center', fontsize=6,
+                col,
+                row,
+                text,
+                ha='center',
+                va='center',
+                fontsize=6,
                 path_effects=_HEATMAP_TEXT_EFFECTS,
             )
 
@@ -499,12 +509,12 @@ def plot_constraint_summary(
     """
     fig, axes = plt.subplots(2, 3, figsize=(18, 8))
     metrics: list[tuple[Axes, npt.NDArray[np.float64], str]] = [
-        (axes[0, 0], pos_err_vals,    'Position error, Euclidean (pixels)'),
-        (axes[0, 1], pos_err_y_vals,  '|pos_err_y| (pixels)'),
-        (axes[0, 2], pos_err_x_vals,  '|pos_err_x| (pixels)'),
-        (axes[1, 0], scale_err_vals,  'Relative scale error'),
+        (axes[0, 0], pos_err_vals, 'Position error, Euclidean (pixels)'),
+        (axes[0, 1], pos_err_y_vals, '|pos_err_y| (pixels)'),
+        (axes[0, 2], pos_err_x_vals, '|pos_err_x| (pixels)'),
+        (axes[1, 0], scale_err_vals, 'Relative scale error'),
         (axes[1, 1], sigma_y_err_vals, 'Relative sigma_y error'),
-        (axes[1, 2], angle_err_vals,  'Angle error (\u00b0, floating modes only)'),
+        (axes[1, 2], angle_err_vals, 'Angle error (\u00b0, floating modes only)'),
     ]
 
     n_cat = len(categories)
@@ -521,9 +531,7 @@ def plot_constraint_summary(
             ax.bar(offsets, display_vals, width=width * 0.9, label=g_label)
             for off, is_nan in zip(offsets, nan_mask, strict=True):
                 if is_nan:
-                    ax.text(
-                        off, 0.0, 'NaN', ha='center', va='bottom', fontsize=5, rotation=90
-                    )
+                    ax.text(off, 0.0, 'NaN', ha='center', va='bottom', fontsize=5, rotation=90)
         ax.set_xticks(x)
         ax.set_xticklabels(categories, rotation=30, ha='right', fontsize=7)
         ax.set_ylabel(metric_label, fontsize=8)
@@ -533,4 +541,6 @@ def plot_constraint_summary(
     fig.suptitle(title, fontsize=10)
     if note:
         _add_figure_note(fig, note, bottom=0.08)
+    else:
+        fig.tight_layout()
     return fig

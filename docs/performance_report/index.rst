@@ -674,8 +674,10 @@ Background Results
    :width: 100%
    :alt: Background study heatmap at amplitude=0.1, ignore=2x2
 
-   Position error (Euclidean, log10) for amplitude=0.1x peak,
-   ignore-center=2x2, offset=(0.25,0.25).  Rows: injected background type.
+   Position error (Euclidean, log10) for amplitude=0.1x peak (``amp3``,
+   0-based index 3 into the amplitude list), ignore-center=2x2 (``ic1``,
+   0-based index 1 into the ignore-center list), offset=(0.25,0.25).
+   Rows: injected background type.
    Columns: fitting polynomial degree.  The ``null`` column (no background
    subtraction) shows catastrophic errors for constant and noisy_constant
    backgrounds.
@@ -889,7 +891,8 @@ Hot-Pixel Results
    :width: 100%
    :alt: Hot pixel rejection position error at amplitude=10x
 
-   Position error vs. number of hot pixels at amplitude=10x peak.
+   Position error vs. number of hot pixels at amplitude=10x peak
+   (``hotamp2``, 0-based index 2 into the amplitude list [2x, 5x, 10x, 20x, 50x, 100x]).
    ``num_sigma=3`` (orange, missing in many panels) causes 100%
    convergence failure.  ``num_sigma=5`` (red) provides the best
    balance of rejection and accuracy.

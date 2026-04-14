@@ -145,27 +145,28 @@ def _write_outputs(
                 if result.sigma_y_err is not None:
                     sigma_y_err_grid[r_idx, a_idx] = abs(result.sigma_y_err)
                 if not is_circular and result.angle_err is not None:
-                    err_deg = math.degrees(result.angle_err)
+                    err_deg = math.degrees(result.angle_err) % 180.0
                     # Reduce modulo 90° to account for the sigma-swap equivalence:
                     # (sigma_y, sigma_x, theta) == (sigma_x, sigma_y, theta+90°).
-                    # When both sigmas float the optimiser may land on either form,
+                    # When both sigmas float the optimizer may land on either form,
                     # making the raw error jump to ~90° for a geometrically perfect
-                    # fit.  min(e, 90-e) maps that back to 0° as it should be.
-                    angle_err_grid[r_idx, a_idx] = min(err_deg, 90.0 - err_deg)
+                    # fit.  min(e, 180-e) maps the [0,180) range into [0,90] as it
+                    # should be, and the modulo ensures negative or >180 values are
+                    # handled correctly before the min.
+                    angle_err_grid[r_idx, a_idx] = min(err_deg, 180.0 - err_deg)
 
         label = f'sigma_x={sigma_x:.1f}'
         for data, metric_title, fname_prefix, cbar in [
-            (pos_err_grid,
-             f'Position error (Euclidean) -- {label}', 'pos_err',   'log10(pos error)'),
-            (pos_err_y_grid,
-             f'|pos_err_y| -- {label}',                'pos_err_y', 'log10(|pos_err_y|)'),
-            (pos_err_x_grid,
-             f'|pos_err_x| -- {label}',                'pos_err_x', 'log10(|pos_err_x|)'),
-            (angle_err_grid,
-             f'Angle error (\u00b0, mod 90\u00b0) -- {label}', 'angle_err',
-             'Angle error (\u00b0, mod 90\u00b0)'),
-            (sigma_y_err_grid,
-             f'Rel sigma_y error -- {label}',          'sigma_y_err', 'log10(rel error)'),
+            (pos_err_grid, f'Position error (Euclidean) -- {label}', 'pos_err', 'log10(pos error)'),
+            (pos_err_y_grid, f'|pos_err_y| -- {label}', 'pos_err_y', 'log10(|pos_err_y|)'),
+            (pos_err_x_grid, f'|pos_err_x| -- {label}', 'pos_err_x', 'log10(|pos_err_x|)'),
+            (
+                angle_err_grid,
+                f'Angle error (\u00b0, mod 90\u00b0) -- {label}',
+                'angle_err',
+                'Angle error (\u00b0, mod 90\u00b0)',
+            ),
+            (sigma_y_err_grid, f'Rel sigma_y error -- {label}', 'sigma_y_err', 'log10(rel error)'),
         ]:
             use_log = 'pos' in fname_prefix or 'sigma' in fname_prefix
             fig = plot_heatmap(

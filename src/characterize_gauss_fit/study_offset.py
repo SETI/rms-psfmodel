@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import pathlib
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -28,7 +29,7 @@ _LOG = logging.getLogger(__name__)
 _STUDY_NAME = 'subpixel_offset'
 
 # Shared grouping key definitions for JSON summary and _write_outputs.
-_GROUP_KEYS: list[Any] = [
+_GROUP_KEYS: list[tuple[str, Callable[[TrialSpec], float]]] = [
     ('sigma', lambda s: s.sigma_y),
     ('offset_y', lambda s: round(s.offset_y, 6)),
     ('offset_x', lambda s: round(s.offset_x, 6)),
@@ -140,9 +141,9 @@ def _write_outputs(
                     grid_x[oy_idx, ox_idx] = abs(r.pos_err_x)
 
         for hmap, metric_label, fname in [
-            (grid,   'Position error (Euclidean)',   f'pos_err_sigma{sigma:.1f}.png'),
-            (grid_y, '|pos_err_y|',                 f'pos_err_y_sigma{sigma:.1f}.png'),
-            (grid_x, '|pos_err_x|',                 f'pos_err_x_sigma{sigma:.1f}.png'),
+            (grid, 'Position error (Euclidean)', f'pos_err_sigma{sigma:.1f}.png'),
+            (grid_y, '|pos_err_y|', f'pos_err_y_sigma{sigma:.1f}.png'),
+            (grid_x, '|pos_err_x|', f'pos_err_x_sigma{sigma:.1f}.png'),
         ]:
             fig = plot_heatmap(
                 hmap,
@@ -176,12 +177,12 @@ def _write_outputs(
     x_arr = np.array(offsets)
 
     for metric_attr, metric_label, vary_axis in [
-        ('pos_err',   'Position error (Euclidean, pixels)', 'offset_x'),
-        ('pos_err_y', '|pos_err_y| (pixels)',               'offset_x'),
-        ('pos_err_x', '|pos_err_x| (pixels)',               'offset_x'),
-        ('pos_err',   'Position error (Euclidean, pixels)', 'offset_y'),
-        ('pos_err_y', '|pos_err_y| (pixels)',               'offset_y'),
-        ('pos_err_x', '|pos_err_x| (pixels)',               'offset_y'),
+        ('pos_err', 'Position error (Euclidean, pixels)', 'offset_x'),
+        ('pos_err_y', '|pos_err_y| (pixels)', 'offset_x'),
+        ('pos_err_x', '|pos_err_x| (pixels)', 'offset_x'),
+        ('pos_err', 'Position error (Euclidean, pixels)', 'offset_y'),
+        ('pos_err_y', '|pos_err_y| (pixels)', 'offset_y'),
+        ('pos_err_x', '|pos_err_x| (pixels)', 'offset_y'),
     ]:
         y_means: list[npt.NDArray[np.float64]] = []
         y_stds: list[npt.NDArray[np.float64]] = []
@@ -195,8 +196,8 @@ def _write_outputs(
                     r = slice_results[mid_idx * n_off + idx]
                 else:
                     r = slice_results[idx * n_off + mid_idx]
-                val = getattr(r, metric_attr) if r.converged else float('nan')
-                row.append(abs(float(val)) if val is not None else float('nan'))
+                val = getattr(r, metric_attr) if r.converged else None
+                row.append(float('nan') if val is None else abs(float(val)))
             y_means.append(np.array(row, dtype=np.float64))
             y_stds.append(np.zeros(n_off, dtype=np.float64))
             line_labels.append(f'sigma={sigma:.1f}')

@@ -81,7 +81,7 @@ characterize_gauss_fit --copy-hires-config-to hires_config.yaml
 
 ## CLI Reference
 
-```
+```text
 usage: characterize_gauss_fit [--config FILE] [--study NAME] [--output-dir DIR]
                                [--num-workers N] [--list-studies]
                                [--copy-default-config-to FILE]
@@ -143,7 +143,7 @@ a `fitting` subsection to override these for that study only.
 | `max_bad_frac` | float | `0.2` | Maximum fraction of pixels that can be masked before the fit is abandoned. |
 | `allow_nonzero_base` | bool | `false` | Fit a constant base level in addition to the polynomial background. |
 | `use_angular_params` | bool | `true` | Reparametrise fit variables as angles for bounded optimization. |
-| `tolerance` | float | `1e-6` | Powell optimiser convergence tolerance. |
+| `tolerance` | float | `1e-6` | Powell optimizer convergence tolerance. |
 | `search_limit` | [float, float] | `[1.5, 1.5]` | Maximum allowed position offset from the starting point [y, x] in pixels. |
 | `scale_limit` | float | `1000.0` | Maximum allowed PSF amplitude scale factor. |
 
@@ -366,9 +366,10 @@ One row per trial. Columns:
 > # Trials where sigma_y was floated and a fitted value was returned:
 > fitted = df[df['sigma_y_fit'].notna()]
 > ```
+
 ### `summary.json`
 
-```json
+```text
 {
   "study": "box_vs_sigma",
   "total_trials": 72,

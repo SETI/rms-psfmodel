@@ -188,7 +188,9 @@ def _write_outputs(
     bucket_map: dict[tuple[int, float | None, float], list[TrialResult]] = {}
     for spec, result in zip(specs, results, strict=True):
         key: tuple[int, float | None, float] = (
-            spec.hot_pixel_count, spec.num_sigma, round(spec.hot_pixel_amplitude, 9)
+            spec.hot_pixel_count,
+            spec.num_sigma,
+            round(spec.hot_pixel_amplitude, 9),
         )
         if key not in bucket_map:
             bucket_map[key] = []
@@ -222,15 +224,16 @@ def _write_outputs(
             note=plot_note,
         )
         save_figure(
-            fig, study_dir,
+            fig,
+            study_dir,
             f'{_STUDY_NAME}_convergence_hotamp{ha_idx}.png',
         )
 
         # --- Position-error plots --------------------------------------------
         for metric_attr, metric_label, fname_prefix in [
-            ('pos_err',   'Mean position error, Euclidean (pixels)', 'pos_err'),
-            ('pos_err_y', 'Mean |pos_err_y| (pixels)',               'pos_err_y'),
-            ('pos_err_x', 'Mean |pos_err_x| (pixels)',               'pos_err_x'),
+            ('pos_err', 'Mean position error, Euclidean (pixels)', 'pos_err'),
+            ('pos_err_y', 'Mean |pos_err_y| (pixels)', 'pos_err_y'),
+            ('pos_err_x', 'Mean |pos_err_x| (pixels)', 'pos_err_x'),
         ]:
             y_means: list[npt.NDArray[np.float64]] = []
             y_stds: list[npt.NDArray[np.float64]] = []
@@ -238,9 +241,7 @@ def _write_outputs(
                 means: list[float] = []
                 stds: list[float] = []
                 for n_hot_count in n_hot_list:
-                    bucket = bucket_map.get(
-                        (n_hot_count, ns_val, round(hot_amp, 9)), []
-                    )
+                    bucket = bucket_map.get((n_hot_count, ns_val, round(hot_amp, 9)), [])
                     arr = np.abs(utils.collect_metric(bucket, metric_attr))
                     means.append(utils.safe_nanmean(arr))
                     stds.append(utils.safe_nanstd(arr))

@@ -157,9 +157,10 @@ def _write_outputs(
         """
         # Defensive: check the spec ordering assumption holds.
         expected_total = n_snr * n_sigma * n_samples
-        assert len(results) == expected_total, (
-            f'Expected {expected_total} results for noise_sensitivity but got {len(results)}'
-        )
+        if len(results) != expected_total:
+            raise RuntimeError(
+                f'Expected {expected_total} results for noise_sensitivity but got {len(results)}'
+            )
         all_means: list[npt.NDArray[np.float64]] = []
         all_stds: list[npt.NDArray[np.float64]] = []
         for s_idx in range(n_sigma):
@@ -180,14 +181,15 @@ def _write_outputs(
     sigma_labels = [f'sigma={s:.1f}' for s in study.sigmas]
 
     for metric, ylabel, fname in [
-        ('pos_err',     'Position error, Euclidean (pixels)', 'pos_err_vs_snr.png'),
-        ('pos_err_y',   '|pos_err_y| (pixels)',               'pos_err_y_vs_snr.png'),
-        ('pos_err_x',   '|pos_err_x| (pixels)',               'pos_err_x_vs_snr.png'),
-        ('sigma_y_err', 'Relative |sigma_y| error',           'sigma_y_err_vs_snr.png'),
-        ('sigma_x_err', 'Relative |sigma_x| error',           'sigma_x_err_vs_snr.png'),
-        ('scale_err',   'Relative |scale| error',             'scale_err_vs_snr.png'),
+        ('pos_err', 'Position error, Euclidean (pixels)', 'pos_err_vs_snr.png'),
+        ('pos_err_y', '|pos_err_y| (pixels)', 'pos_err_y_vs_snr.png'),
+        ('pos_err_x', '|pos_err_x| (pixels)', 'pos_err_x_vs_snr.png'),
+        ('sigma_y_err', 'Relative |sigma_y| error', 'sigma_y_err_vs_snr.png'),
+        ('sigma_x_err', 'Relative |sigma_x| error', 'sigma_x_err_vs_snr.png'),
+        ('scale_err', 'Relative |scale| error', 'scale_err_vs_snr.png'),
     ]:
-        means, stds = _collect_metric_grid(metric, abs_values=True)
+        # pos_err is a Euclidean distance (always non-negative); abs is not needed.
+        means, stds = _collect_metric_grid(metric, abs_values=(metric != 'pos_err'))
         fig = plot_line_with_bands(
             snr_arr,
             means,

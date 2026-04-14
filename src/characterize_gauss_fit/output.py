@@ -229,8 +229,16 @@ def _aggregate_results(results: list[TrialResult]) -> dict[str, Any]:
     n_converged = len(converged)
 
     pos_errs = [r.pos_err for r in converged if math.isfinite(r.pos_err)]
-    sigma_y_errs = [r.sigma_y_err for r in converged if r.sigma_y_err is not None]
-    sigma_x_errs = [r.sigma_x_err for r in converged if r.sigma_x_err is not None]
+    sigma_y_errs = [
+        r.sigma_y_err
+        for r in converged
+        if r.sigma_y_err is not None and math.isfinite(r.sigma_y_err)
+    ]
+    sigma_x_errs = [
+        r.sigma_x_err
+        for r in converged
+        if r.sigma_x_err is not None and math.isfinite(r.sigma_x_err)
+    ]
     angle_errs = [r.angle_err for r in converged if r.angle_err is not None]
     scale_errs = [r.scale_err for r in converged if math.isfinite(r.scale_err)]
 

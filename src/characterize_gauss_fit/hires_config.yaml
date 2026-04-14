@@ -128,7 +128,8 @@ studies:
     noise_samples: 200
     box_size: 21
 
-  # Study 8: 8 hot-pixel counts x 4 num_sigma x 6 amplitudes x 50 samples
+  # Study 8: 8 hot-pixel counts x 6 num_sigma x 6 amplitudes x 50 samples
+  # (num_sigma: 5 values [3.0, 4.0, 5.0, 6.0, 8.0] plus null = 6 options)
   # Fills in the hot-pixel count axis more densely (adds 2, 7, 15) and expands
   # hot_amplitudes (adds 2x, 10x, 50x) for a more complete rejection map.
   # Noise samples raised to 50 for less noisy line plots.

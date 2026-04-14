@@ -182,9 +182,10 @@ def _write_outputs(
                 bucket_key = (delta, sigma, cond_label)
                 result_map[bucket_key] = results[idx : idx + n_trials]
                 idx += n_trials
-    assert idx == len(results), (
-        f'result_map bucketing consumed {idx} results but {len(results)} were returned'
-    )
+    if idx != len(results):
+        raise RuntimeError(
+            f'result_map bucketing consumed {idx} results but {len(results)} were returned'
+        )
 
     x_arr = np.array(deltas)
     delta_labels = [f'{d:.3g}' for d in deltas]
@@ -202,9 +203,9 @@ def _write_outputs(
             )
         )
         for metric_attr, metric_label, fname_prefix in [
-            ('pos_err',   'Mean position error (Euclidean, pixels)', 'pos_err'),
-            ('pos_err_y', 'Mean |pos_err_y| (pixels)',               'pos_err_y'),
-            ('pos_err_x', 'Mean |pos_err_x| (pixels)',               'pos_err_x'),
+            ('pos_err', 'Mean position error (Euclidean, pixels)', 'pos_err'),
+            ('pos_err_y', 'Mean |pos_err_y| (pixels)', 'pos_err_y'),
+            ('pos_err_x', 'Mean |pos_err_x| (pixels)', 'pos_err_x'),
         ]:
             y_means: list[npt.NDArray[np.float64]] = []
             y_stds: list[npt.NDArray[np.float64]] = []
@@ -225,9 +226,7 @@ def _write_outputs(
                         stds_per_delta.append(float('nan'))
                     else:
                         means_per_delta.append(float(np.mean(errs)))
-                        stds_per_delta.append(
-                            float(np.std(errs, ddof=1)) if len(errs) > 1 else 0.0
-                        )
+                        stds_per_delta.append(float(np.std(errs, ddof=1)) if len(errs) > 1 else 0.0)
                 y_means.append(np.array(means_per_delta))
                 y_stds.append(np.array(stds_per_delta))
                 line_labels.append(f'sigma={sigma:.2g}')
@@ -268,10 +267,8 @@ def _write_outputs(
             rec_grid,
             delta_labels,
             sigma_labels,
-            title=(
-                f'Recovery fraction (pos_err < delta/2) -- {cond_label}'
-            ),
-            xlabel='Injected X offset / delta (pixels)',
+            title=(f'Recovery fraction (pos_err < delta/2) -- {cond_label}'),
+            xlabel='Injected X offset (delta, pixels)',
             ylabel='Sigma (pixels)',
             note=(
                 f'PSF: sigma_y = sigma_x = sigma (y-axis); angle = 0\u00b0 (fixed);'

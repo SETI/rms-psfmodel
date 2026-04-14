@@ -85,9 +85,7 @@ def build_specs(cfg: Config) -> tuple[list[TrialSpec], list[int | None]]:
                             bkgnd_degree=fit_degree,
                             bkgnd_ignore_center=ignore_center,
                         )
-                        inj_amplitude = (
-                            0.0 if bkgnd_type == BACKGROUND_TYPE_NONE else amplitude
-                        )
+                        inj_amplitude = 0.0 if bkgnd_type == BACKGROUND_TYPE_NONE else amplitude
                         specs.append(
                             utils.make_spec(
                                 sigma_y=study.sigma[0],
@@ -191,14 +189,11 @@ def _write_outputs(
                 fail_mask = np.zeros_like(grid, dtype=bool)
 
                 for bt_idx, bkgnd_type in enumerate(bkgnd_types):
-                    inj_amplitude = (
-                        0.0 if bkgnd_type == BACKGROUND_TYPE_NONE else amplitude
-                    )
+                    inj_amplitude = 0.0 if bkgnd_type == BACKGROUND_TYPE_NONE else amplitude
                     for fd_idx, fit_degree in enumerate(fit_degrees):
                         ic_key: tuple[int, int] = (ignore_center[0], ignore_center[1])
                         found: TrialResult | None = lookup.get(
-                            (offset_y, offset_x, bkgnd_type,
-                             inj_amplitude, fit_degree, ic_key)
+                            (offset_y, offset_x, bkgnd_type, inj_amplitude, fit_degree, ic_key)
                         )
                         if found is None:
                             continue
@@ -223,9 +218,9 @@ def _write_outputs(
                     f' bkgnd_ignore_center = {ic_str} (see title)'
                 )
                 for hmap, metric_label, fsuffix in [
-                    (grid,   'Position error (Euclidean)',  ''),
-                    (grid_y, '|pos_err_y|',                '_y'),
-                    (grid_x, '|pos_err_x|',                '_x'),
+                    (grid, 'Position error (Euclidean)', ''),
+                    (grid_y, '|pos_err_y|', '_y'),
+                    (grid_x, '|pos_err_x|', '_x'),
                 ]:
                     fig = plot_heatmap(
                         hmap,
@@ -254,11 +249,11 @@ def _write_outputs(
         specs,
         results,
         [
-            ('offset_y',            lambda s: s.offset_y),
-            ('offset_x',            lambda s: s.offset_x),
-            ('background_type',     lambda s: s.background_type),
+            ('offset_y', lambda s: s.offset_y),
+            ('offset_x', lambda s: s.offset_x),
+            ('background_type', lambda s: s.background_type),
             ('background_amplitude', lambda s: s.background_amplitude),
-            ('bkgnd_degree',        lambda s: s.bkgnd_degree),
+            ('bkgnd_degree', lambda s: s.bkgnd_degree),
             ('bkgnd_ignore_center', lambda s: s.bkgnd_ignore_center),
         ],
     )

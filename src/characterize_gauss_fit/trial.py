@@ -368,14 +368,10 @@ def run_trial(spec: TrialSpec) -> TrialResult:
 
     if 'sigma_y' in details:
         sigma_y_fit = float(details['sigma_y'])
-        sigma_y_err = (
-            (sigma_y_fit - spec.sigma_y) / spec.sigma_y if spec.sigma_y != 0.0 else None
-        )
+        sigma_y_err = (sigma_y_fit - spec.sigma_y) / spec.sigma_y if spec.sigma_y != 0.0 else _NAN
     if 'sigma_x' in details:
         sigma_x_fit = float(details['sigma_x'])
-        sigma_x_err = (
-            (sigma_x_fit - spec.sigma_x) / spec.sigma_x if spec.sigma_x != 0.0 else None
-        )
+        sigma_x_err = (sigma_x_fit - spec.sigma_x) / spec.sigma_x if spec.sigma_x != 0.0 else _NAN
 
     # Retrieve fitted angle if it was floating.
     angle_fit: float | None = None

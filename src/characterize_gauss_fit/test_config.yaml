@@ -61,8 +61,8 @@ studies:
     fitting:
       bkgnd_degree: null
 
-  # Study 5: 5 modes x 2 shapes = 24 trials (modes: all_float, sigma_fixed_correct,
-  #          angle_fixed_correct, all_fixed_correct, all_fixed_errors)
+  # Study 5: 5 modes x 2 shapes x 2 sigma_error_fractions = 20 trials (modes: all_float,
+  #          sigma_fixed_correct, angle_fixed_correct, all_fixed_correct, all_fixed_errors)
   constraint_modes:
     enabled: true
     sigma_error_fractions: [0.0, 0.3]
@@ -99,7 +99,7 @@ studies:
     noise_samples: 3
     box_size: 13
 
-  # Study 8: 2 num_hot x 1 num_sigma x 1 amplitude x 3 noise samples = 6 trials
+  # Study 8: 2 num_hot x 2 num_sigma x 1 amplitude x 3 noise samples = 12 trials
   hot_pixel_rejection:
     enabled: true
     num_hot_pixels: [0, 3]

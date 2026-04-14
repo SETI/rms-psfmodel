@@ -247,7 +247,7 @@ def _write_outputs(
                 if result.sigma_y_err is not None:
                     sigma_y_err_vals[m_idx, s_idx] = abs(result.sigma_y_err)
                 if result.angle_err is not None and np.isfinite(result.angle_err):
-                    angle_err_vals[m_idx, s_idx] = math.degrees(result.angle_err)
+                    angle_err_vals[m_idx, s_idx] = math.degrees(abs(result.angle_err))
 
     fig = plot_constraint_summary(
         mode_labels,

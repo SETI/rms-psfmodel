@@ -38,6 +38,7 @@ def offset_tag(offset_y: float, offset_x: float) -> str:
     Returns:
         A short ASCII string safe for use in file and directory names.
     """
+
     def _fmt(v: float) -> str:
         return f'{v:.2f}'.replace('.', 'p').replace('-', 'm')
 
@@ -171,8 +172,7 @@ def collect_metric(
         AttributeError: If ``metric`` is not a field of :class:`~trial.TrialResult`.
     """
     values = [
-        float('nan') if getattr(r, metric) is None else float(getattr(r, metric))
-        for r in results
+        float('nan') if (r_val := getattr(r, metric)) is None else float(r_val) for r in results
     ]
     return np.array(values, dtype=np.float64)
 

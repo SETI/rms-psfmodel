@@ -5,9 +5,7 @@ copyright = "2026, SETI Institute"
 author = "SETI Institute"
 release = ""
 
-extensions = [
-    "sphinx.ext.intersphinx",
-]
+extensions = []
 
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 

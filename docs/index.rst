@@ -16,6 +16,7 @@ Welcome to the Documentation for rms-psfmodel!
    contributing
    code_of_conduct
    module
+   performance_report/index
 
 Indices and tables
 ==================

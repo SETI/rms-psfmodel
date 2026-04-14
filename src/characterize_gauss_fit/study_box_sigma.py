@@ -164,12 +164,12 @@ def _write_outputs(
             f' no background subtraction'
         )
         for data, metric_title, metric_key in [
-            (pos_err_grid,   'Position error (Euclidean)',    'pos_err'),
-            (pos_err_y_grid, '|pos_err_y|',                  'pos_err_y'),
-            (pos_err_x_grid, '|pos_err_x|',                  'pos_err_x'),
-            (sigma_y_err_grid, 'Relative |sigma_y| error',   'sigma_y_err'),
-            (sigma_x_err_grid, 'Relative |sigma_x| error',   'sigma_x_err'),
-            (scale_err_grid, 'Relative |scale| error',       'scale_err'),
+            (pos_err_grid, 'Position error (Euclidean)', 'pos_err'),
+            (pos_err_y_grid, '|pos_err_y|', 'pos_err_y'),
+            (pos_err_x_grid, '|pos_err_x|', 'pos_err_x'),
+            (sigma_y_err_grid, 'Relative |sigma_y| error', 'sigma_y_err'),
+            (sigma_x_err_grid, 'Relative |sigma_x| error', 'sigma_x_err'),
+            (scale_err_grid, 'Relative |scale| error', 'scale_err'),
         ]:
             fig = plot_heatmap(
                 data,
@@ -216,6 +216,6 @@ def build_json_groups(specs: list[TrialSpec], results: list[TrialResult]) -> lis
             ('offset_y', lambda s: s.offset_y),
             ('offset_x', lambda s: s.offset_x),
             ('box_size', lambda s: s.box_size),
-            ('sigma',    lambda s: s.sigma_y),
+            ('sigma', lambda s: s.sigma_y),
         ],
     )

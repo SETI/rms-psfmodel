@@ -157,8 +157,7 @@ def run_trials(
             max_workers=num_workers, mp_context=mp_ctx
         ) as pool:
             futures: dict[concurrent.futures.Future[list[TrialResult]], int] = {
-                pool.submit(_run_trial_batch, chunk): chunk_start
-                for chunk_start, chunk in chunks
+                pool.submit(_run_trial_batch, chunk): chunk_start for chunk_start, chunk in chunks
             }
             for future in concurrent.futures.as_completed(futures):
                 chunk_start = futures[future]
@@ -170,9 +169,8 @@ def run_trials(
                     progress_callback(n_done, total)
 
         # All futures completed; ordered contains no None entries.
-        assert all(r is not None for r in ordered), (
-            'Internal error: some futures did not produce a result'
-        )
+        if not all(r is not None for r in ordered):
+            raise RuntimeError('Internal error: some futures did not produce a result')
         results = [r for r in ordered if r is not None]
 
     return results

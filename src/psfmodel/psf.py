@@ -768,11 +768,9 @@ class PSF(ABC):
 
         if self.detailed_logging:
             msg = f'find_position returning Y {res_y + starting_pix[0]:.4f}'
-            if details['y_err'] is not None:
-                msg += f' +/- {details["y_err"]:.4f}'
+            msg += f' +/- {details["y_err"]:.4f}'
             msg += f' X {res_x + starting_pix[1]:.4f}'
-            if details['x_err'] is not None:
-                msg += f' +/- {details["x_err"]:.4f}'
+            msg += f' +/- {details["x_err"]:.4f}'
             if details['scale'] is not None:
                 msg += f' Scale {details["scale"]:.4f} Base {details["base"]:.4f}'
             if 'sigma_y' in details:
@@ -1116,8 +1114,17 @@ class PSF(ABC):
         _n_valid = int(_resid_flat.size)
         _n_params_fit = 3 + int(allow_nonzero_base) + len(self._additional_params)
         _rss = float(np.dot(_resid_flat, _resid_flat))
-        _dof = max(_n_valid - _n_params_fit, 1)
-        _reduced_chi2 = _rss / _dof
+        if _n_valid <= _n_params_fit:
+            self._logger.warning(
+                'find_position: underconstrained fit (%d valid pixels, %d fitted parameters);'
+                ' reduced_chi2 set to NaN',
+                _n_valid,
+                _n_params_fit,
+            )
+            _reduced_chi2 = float('nan')
+        else:
+            _dof = _n_valid - _n_params_fit
+            _reduced_chi2 = _rss / _dof
         _noise_rms = float(np.sqrt(_rss / _n_valid)) if _n_valid > 0 else 0.0
         _peak_snr = float(scale / _noise_rms) if _noise_rms > 0.0 else 0.0
 
@@ -1161,24 +1168,29 @@ class PSF(ABC):
             return _d.flatten().astype(np.float64)
 
         # Forward-difference Jacobian of the residual vector in physical space.
-        _jac = np.zeros((_n_valid, _n_phys), dtype=np.float64)
-        for _col in range(_n_phys):
-            _val = _phys[_col]
-            _eps = max(abs(_val) * _JACO_REL_EPS, _JACO_ABS_EPS)
-            _phys_plus = list(_phys)
-            _phys_plus[_col] += _eps
-            _r_plus = _residuals_at_phys(_phys_plus)
-            _jac[:, _col] = (_r_plus - _resid_flat) / _eps
+        if _n_valid == 0:
+            # No valid pixels: uncertainties are undefined.
+            _cov = np.full((_n_phys, _n_phys), np.nan)
+            _uncertainties = np.full(_n_phys, np.nan)
+        else:
+            _jac = np.zeros((_n_valid, _n_phys), dtype=np.float64)
+            for _col in range(_n_phys):
+                _val = _phys[_col]
+                _eps = max(abs(_val) * _JACO_REL_EPS, _JACO_ABS_EPS)
+                _phys_plus = list(_phys)
+                _phys_plus[_col] += _eps
+                _r_plus = _residuals_at_phys(_phys_plus)
+                _jac[:, _col] = (_r_plus - _resid_flat) / _eps
 
-        # Covariance = reduced_chi2 * (J^T J)^{-1}; use lstsq for robustness when
-        # J^T J is ill-conditioned (e.g. underconstrained fits).
-        _jtj = _jac.T @ _jac
-        _cov_raw, _, _, _ = np.linalg.lstsq(_jtj, np.eye(_n_phys), rcond=None)
-        _cov = _cov_raw * _reduced_chi2
+            # Covariance = reduced_chi2 * (J^T J)^{-1}; use lstsq for robustness when
+            # J^T J is ill-conditioned (e.g. underconstrained fits).
+            _jtj = _jac.T @ _jac
+            _cov_raw, _, _, _ = np.linalg.lstsq(_jtj, np.eye(_n_phys), rcond=None)
+            _cov = _cov_raw * _reduced_chi2
 
-        # Diagonal 1-sigma uncertainties; negative variances (numerical noise) are
-        # clamped to zero before taking the square root.
-        _uncertainties = np.sqrt(np.maximum(np.diag(_cov), 0.0))
+            # Diagonal 1-sigma uncertainties; negative variances (numerical noise) are
+            # clamped to zero before taking the square root.
+            _uncertainties = np.sqrt(np.maximum(np.diag(_cov), 0.0))
 
         details['y_err'] = float(_uncertainties[0])
         details['x_err'] = float(_uncertainties[1])

@@ -49,10 +49,9 @@ _STUDY_REGISTRY: dict[str, _StudyRunner] = {
 }
 
 # Ensure STUDY_NAMES (from config) and _STUDY_REGISTRY stay in sync.
-assert set(STUDY_NAMES) == set(_STUDY_REGISTRY), (
-    f'STUDY_NAMES and _STUDY_REGISTRY are out of sync: '
-    f'{set(STUDY_NAMES).symmetric_difference(set(_STUDY_REGISTRY))}'
-)
+_diff = set(STUDY_NAMES).symmetric_difference(set(_STUDY_REGISTRY))
+if _diff:
+    raise RuntimeError(f'STUDY_NAMES and _STUDY_REGISTRY are out of sync: {_diff}')
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -115,10 +114,7 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar='FILE',
         type=pathlib.Path,
         default=None,
-        help=(
-            'Write the built-in default configuration to FILE and exit. '
-            'No studies are run.'
-        ),
+        help=('Write the built-in default configuration to FILE and exit. No studies are run.'),
     )
     parser.add_argument(
         '--copy-test-config-to',
@@ -136,8 +132,7 @@ def _build_parser() -> argparse.ArgumentParser:
         type=pathlib.Path,
         default=None,
         help=(
-            'Write the built-in high-resolution configuration to FILE and exit. '
-            'No studies are run.'
+            'Write the built-in high-resolution configuration to FILE and exit. No studies are run.'
         ),
     )
     parser.add_argument(
