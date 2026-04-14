@@ -11,16 +11,27 @@ objects either sequentially in the calling process or in parallel using
 Worker isolation: :class:`~psfmodel.gaussian.GaussianPSF` objects are
 constructed inside each worker from the plain-data fields of
 :class:`~trial.TrialSpec`. No complex objects cross process boundaries.
+
+Chunking: to reduce IPC and pickle overhead, specs are grouped into batches
+before dispatch.  Each worker executes a full batch per ``submit()`` call.
+The batch size is ``ceil(total / (num_workers * _CHUNK_MULTIPLIER))``.  A
+multiplier of 4 gives 4x over-subscription, balancing load across workers
+while keeping the number of round-trips low.
 """
 
 from __future__ import annotations
 
 import concurrent.futures
 import logging
+import math
 import multiprocessing
 from collections.abc import Callable
 
 from characterize_gauss_fit.trial import TrialResult, TrialSpec, run_trial
+
+# Number of chunks per worker.  Higher values improve load balancing at the
+# cost of more (but still far fewer than one-per-trial) IPC round-trips.
+_CHUNK_MULTIPLIER = 4
 
 _LOG = logging.getLogger(__name__)
 
@@ -68,6 +79,22 @@ def _safe_run_trial(spec: TrialSpec) -> TrialResult:
         )
 
 
+def _run_trial_batch(specs: list[TrialSpec]) -> list[TrialResult]:
+    """Execute a batch of trials inside a single worker call.
+
+    Running multiple trials per ``submit()`` call amortises the per-call
+    pickle and IPC overhead across the whole batch, which dramatically
+    reduces the per-trial overhead compared to submitting one trial at a time.
+
+    Parameters:
+        specs: Ordered list of :class:`~trial.TrialSpec` objects to execute.
+
+    Returns:
+        Results in the same order as ``specs``.
+    """
+    return [_safe_run_trial(spec) for spec in specs]
+
+
 def run_trials(
     trial_specs: list[TrialSpec],
     *,
@@ -82,8 +109,13 @@ def run_trials(
             sequentially in the calling process with no multiprocessing overhead.
             Values ``>1`` use :class:`concurrent.futures.ProcessPoolExecutor`
             with the ``spawn`` start method to avoid fork-related crashes.
-        progress_callback: Optional callable ``(completed, total)`` invoked after
-            each trial result is collected, useful for progress display.
+            Trials are grouped into chunks of size
+            ``ceil(total / (num_workers * _CHUNK_MULTIPLIER))`` so that each
+            worker executes many trials per ``submit()`` call, reducing IPC and
+            pickle overhead and making speedup more linear with CPU count.
+        progress_callback: Optional callable ``(completed, total)`` invoked
+            after each chunk of results is collected, useful for progress
+            display.
 
     Returns:
         A list of :class:`~trial.TrialResult` objects in the same order as
@@ -107,17 +139,36 @@ def run_trials(
         # actually transferring the threads, causing a segfault during worker
         # cleanup when those phantom pools are torn down.
         mp_ctx = multiprocessing.get_context('spawn')
+
+        # Group specs into batches so each worker handles multiple trials per
+        # submit() call.  _CHUNK_MULTIPLIER chunks per worker gives 4x
+        # over-subscription for load balancing.
+        chunk_size = max(1, math.ceil(total / (num_workers * _CHUNK_MULTIPLIER)))
+        chunks: list[tuple[int, list[TrialSpec]]] = []
+        start = 0
+        while start < total:
+            end = min(start + chunk_size, total)
+            chunks.append((start, trial_specs[start:end]))
+            start = end
+
+        ordered: list[TrialResult | None] = [None] * total
+        n_done = 0
         with concurrent.futures.ProcessPoolExecutor(
             max_workers=num_workers, mp_context=mp_ctx
         ) as pool:
-            futures = {pool.submit(_safe_run_trial, spec): i for i, spec in enumerate(trial_specs)}
-            # Collect in submission order to preserve determinism.
-            ordered: list[TrialResult | None] = [None] * total
-            for n_done, future in enumerate(concurrent.futures.as_completed(futures), start=1):
-                idx = futures[future]
-                ordered[idx] = future.result()
+            futures: dict[concurrent.futures.Future[list[TrialResult]], int] = {
+                pool.submit(_run_trial_batch, chunk): chunk_start
+                for chunk_start, chunk in chunks
+            }
+            for future in concurrent.futures.as_completed(futures):
+                chunk_start = futures[future]
+                chunk_results = future.result()
+                for j, result in enumerate(chunk_results):
+                    ordered[chunk_start + j] = result
+                n_done += len(chunk_results)
                 if progress_callback is not None:
                     progress_callback(n_done, total)
+
         # All futures completed; ordered contains no None entries.
         assert all(r is not None for r in ordered), (
             'Internal error: some futures did not produce a result'
