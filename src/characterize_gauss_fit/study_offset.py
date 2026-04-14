@@ -114,6 +114,7 @@ def _write_outputs(
         study_dir: Output subdirectory.
     """
     study = cfg.studies.subpixel_offset
+    scale = cfg.generation.scale
     offsets = list(np.linspace(study.offset_range[0], study.offset_range[1], study.offset_steps))
     n_off = study.offset_steps
     sigmas = study.sigmas
@@ -154,8 +155,16 @@ def _write_outputs(
                 log_scale=True,
                 mask=fail_mask,
                 note=(
-                    f'box_size={study.box_size}, angle={study.angle:.1f}\u00b0, '
-                    f'no background, noiseless'
+                    f'PSF: sigma_y = sigma_x = {sigma:.2g} px (fixed for this heatmap);'
+                    f' angle = {study.angle:.0f}\u00b0 (fixed); box_size = {study.box_size} px;'
+                    f' scale = {scale:.2g}; one noiseless trial per cell\n'
+                    f'Offset: Y and X each swept over a'
+                    f' {study.offset_steps}\u00d7{study.offset_steps}'
+                    f' grid from {study.offset_range[0]:.2f} to {study.offset_range[1]:.2f} px'
+                    f' (the two heatmap axes)\n'
+                    f'Background / noise: none injected\n'
+                    f'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
+                    f' no background subtraction'
                 ),
             )
             save_figure(fig, study_dir, f'{_STUDY_NAME}_{fname}')
@@ -206,8 +215,14 @@ def _write_outputs(
             ylabel=metric_label,
             log_y=True,
             note=(
-                f'box_size={study.box_size}, angle={study.angle:.1f}\u00b0, '
-                f'no background, noiseless'
+                f'PSF: sigma_y = sigma_x = sigma (series label); angle = {study.angle:.0f}\u00b0'
+                f' (fixed); box_size = {study.box_size} px; scale = {scale:.2g};'
+                f' one noiseless trial per point\n'
+                f'Offset: the fixed axis is held at its midpoint ({offsets[mid_idx]:.2f} px);'
+                f' the swept axis is the x-axis\n'
+                f'Background / noise: none injected\n'
+                f'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
+                f' no background subtraction'
             ),
         )
         save_figure(fig, study_dir, f'{_STUDY_NAME}_{fname_line}')

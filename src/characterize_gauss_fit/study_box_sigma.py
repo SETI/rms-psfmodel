@@ -155,8 +155,13 @@ def _write_outputs(
 
         offset_str = f'offset ({offset_y:+.2f}, {offset_x:+.2f})'
         plot_note = (
-            f'angle={study.angle:.1f}\u00b0, scale={study.scale:.0f}, '
-            f'no background, \u03c3 fitted freely, noiseless'
+            f'PSF: sigma_y = sigma_x = sigma (x-axis); angle = {study.angle:.0f}\u00b0 (fixed,'
+            f' axis-aligned); scale = {study.scale:.2g}; one noiseless trial per cell\n'
+            f'Offset: Y = {offset_y:+.2f}, X = {offset_x:+.2f} px from pixel centre'
+            f' (fixed; one heatmap produced per offset pair)\n'
+            f'Background / noise: none injected; image is clean Gaussian pixel integrals only\n'
+            f'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
+            f' no background subtraction'
         )
         for data, metric_title, metric_key in [
             (pos_err_grid,   'Position error (Euclidean)',    'pos_err'),

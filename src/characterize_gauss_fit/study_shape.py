@@ -112,6 +112,7 @@ def _write_outputs(
         study_dir: Output subdirectory.
     """
     study = cfg.studies.sigma_asymmetry_angle
+    scale = cfg.generation.scale
     angles = list(np.linspace(0.0, math.pi, study.angle_steps))
     n_angles = len(angles)
     n_ratios = len(study.sigma_ratios)
@@ -144,7 +145,13 @@ def _write_outputs(
                 if result.sigma_y_err is not None:
                     sigma_y_err_grid[r_idx, a_idx] = abs(result.sigma_y_err)
                 if not is_circular and result.angle_err is not None:
-                    angle_err_grid[r_idx, a_idx] = math.degrees(result.angle_err)
+                    err_deg = math.degrees(result.angle_err)
+                    # Reduce modulo 90° to account for the sigma-swap equivalence:
+                    # (sigma_y, sigma_x, theta) == (sigma_x, sigma_y, theta+90°).
+                    # When both sigmas float the optimiser may land on either form,
+                    # making the raw error jump to ~90° for a geometrically perfect
+                    # fit.  min(e, 90-e) maps that back to 0° as it should be.
+                    angle_err_grid[r_idx, a_idx] = min(err_deg, 90.0 - err_deg)
 
         label = f'sigma_x={sigma_x:.1f}'
         for data, metric_title, fname_prefix, cbar in [
@@ -155,7 +162,8 @@ def _write_outputs(
             (pos_err_x_grid,
              f'|pos_err_x| -- {label}',                'pos_err_x', 'log10(|pos_err_x|)'),
             (angle_err_grid,
-             f'Angle error (\u00b0) -- {label}',          'angle_err', 'Angle error (\u00b0)'),
+             f'Angle error (\u00b0, mod 90\u00b0) -- {label}', 'angle_err',
+             'Angle error (\u00b0, mod 90\u00b0)'),
             (sigma_y_err_grid,
              f'Rel sigma_y error -- {label}',          'sigma_y_err', 'log10(rel error)'),
         ]:
@@ -171,9 +179,17 @@ def _write_outputs(
                 log_scale=use_log,
                 mask=fail_mask,
                 note=(
-                    f'box={study.box_size}, '
-                    f'offset=({study.offset[0]:+.2f},{study.offset[1]:+.2f}), '
-                    f'no background, noiseless, \u03c3 and angle fitted freely'
+                    f'PSF: sigma_x = {sigma_x:.2g} px (this panel); sigma_y = ratio \u00d7 sigma_x'
+                    f' (y-axis); angle rotates 0\u2013180\u00b0 (x-axis); scale = {scale:.2g};'
+                    f' one noiseless trial per cell\n'
+                    f'Offset: Y = {study.offset[0]:+.2f}, X = {study.offset[1]:+.2f} px'
+                    f' from pixel centre (fixed for all cells)\n'
+                    f'Background / noise: none injected\n'
+                    f'Fitting: sigma_y, sigma_x, and angle ALL float freely;'
+                    f' no background subtraction\n'
+                    f'Angle error is reduced mod 90\u00b0: (sigma_y,sigma_x,\u03b8) \u2261'
+                    f' (sigma_x,sigma_y,\u03b8+90\u00b0) so raw error \u2248 90\u00b0 means'
+                    f' a perfect fit in the swapped-sigma form'
                 ),
             )
             save_figure(fig, study_dir, f'{_STUDY_NAME}_{fname_prefix}_sx{sigma_x:.1f}.png')

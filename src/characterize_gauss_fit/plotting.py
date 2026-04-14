@@ -31,6 +31,10 @@ _SAVE_DPI = 150
 # Colour used to mark cells / points where the fitter did not converge.
 _FAIL_COLOUR = '#cccccc'
 
+# Line styles cycled across series in plot_line_with_bands so that series
+# remain distinguishable when they overlap or when colour alone is ambiguous.
+_LINE_STYLES = ['-', '--', '-.', ':', (0, (3, 1, 1, 1)), (0, (5, 2))]
+
 # Path effects applied to heatmap cell annotations so text is readable on any
 # background colour.
 _HEATMAP_TEXT_EFFECTS = [_pe.withStroke(linewidth=3, foreground='white')]
@@ -49,17 +53,28 @@ _NOTE_STYLE: dict[str, object] = {
 def _add_figure_note(fig: Figure, note: str, *, bottom: float = 0.12) -> None:
     """Render ``note`` as a small italic footnote at the bottom of ``fig``.
 
-    Reserves bottom margin so the note does not overlap plot content.
+    Uses ``tight_layout(rect=[0, note_strip, 1, 1])`` so matplotlib positions
+    the axes, tick labels, and x-axis title entirely *above* the note strip in
+    a single consistent pass.  This prevents the x-axis title from ending up
+    in the same vertical band as the note text.
 
     Parameters:
         fig: The figure to annotate.
         note: Text to display.  May contain newlines.
-        bottom: Fraction of figure height reserved for the note.
+        bottom: Minimum fraction of figure height reserved for the note strip.
     """
+    n_lines = note.count('\n') + 1
+    fig_height = fig.get_figheight()
+    # 7 pt font at 72 pt/inch with 1.15x line spacing plus 0.06 in padding.
+    note_frac = (n_lines * 7 * 1.15 / 72.0 + 0.06) / fig_height
+    actual_bottom = max(bottom, note_frac)
     kw = dict(_NOTE_STYLE)
     kw['transform'] = fig.transFigure
-    fig.text(0.5, 0.01, note, **kw)  # type: ignore[arg-type]
-    fig.subplots_adjust(bottom=bottom)
+    # Place note text just above the figure bottom edge, inside the reserved strip.
+    fig.text(0.5, 0.005, note, **kw)  # type: ignore[arg-type]
+    # Single tight_layout call: everything (axes + labels) goes in the rect
+    # above the note strip, so x-axis title never overlaps the note.
+    fig.tight_layout(rect=[0.0, actual_bottom, 1.0, 1.0])
 
 
 def save_figure(fig: Figure, output_dir: pathlib.Path, filename: str) -> pathlib.Path:
@@ -74,7 +89,6 @@ def save_figure(fig: Figure, output_dir: pathlib.Path, filename: str) -> pathlib
         Path to the written PNG file.
     """
     path = output_dir / filename
-    fig.tight_layout()
     fig.savefig(path, dpi=_SAVE_DPI)
     plt.close(fig)
     return path
@@ -115,7 +129,11 @@ def plot_heatmap(
         A :class:`matplotlib.figure.Figure`.
     """
     n_rows, n_cols = data.shape
-    fig, ax = plt.subplots(figsize=(max(6, n_cols * 0.8), max(4, n_rows * 0.7)))
+    # Extra height (+1.2) reserves room for the title and the footnote without
+    # either being clipped.  tight_layout() further adjusts subplot margins.
+    fig, ax = plt.subplots(
+        figsize=(max(7, n_cols * 0.9 + 1), max(5.5, n_rows * 0.7 + 1.2))
+    )
 
     display = data.astype(float)
     if log_scale:
@@ -157,6 +175,8 @@ def plot_heatmap(
 
     if note:
         _add_figure_note(fig, note, bottom=0.10)
+    else:
+        fig.tight_layout()
     return fig
 
 
@@ -193,8 +213,9 @@ def plot_line_with_bands(
     """
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    for y_mean, y_std, label in zip(y_means, y_stds, labels, strict=True):
-        (line,) = ax.plot(x, y_mean, label=label, marker='o', markersize=3)
+    for i, (y_mean, y_std, label) in enumerate(zip(y_means, y_stds, labels, strict=True)):
+        ls = _LINE_STYLES[i % len(_LINE_STYLES)]
+        (line,) = ax.plot(x, y_mean, label=label, marker='o', markersize=3, linestyle=ls)
         colour = line.get_color()
         if log_y:
             lower = np.maximum(y_mean - y_std, 1e-15)
@@ -399,7 +420,9 @@ def plot_recovery_fraction_heatmap(
         A :class:`matplotlib.figure.Figure`.
     """
     n_rows, n_cols = recovery_fractions.shape
-    fig, ax = plt.subplots(figsize=(max(6, n_cols * 0.8), max(4, n_rows * 0.7)))
+    fig, ax = plt.subplots(
+        figsize=(max(7, n_cols * 0.9 + 1), max(5.5, n_rows * 0.7 + 1.2))
+    )
 
     img = ax.imshow(
         recovery_fractions,
@@ -434,6 +457,8 @@ def plot_recovery_fraction_heatmap(
 
     if note:
         _add_figure_note(fig, note, bottom=0.10)
+    else:
+        fig.tight_layout()
     return fig
 
 
@@ -479,7 +504,7 @@ def plot_constraint_summary(
         (axes[0, 2], pos_err_x_vals,  '|pos_err_x| (pixels)'),
         (axes[1, 0], scale_err_vals,  'Relative scale error'),
         (axes[1, 1], sigma_y_err_vals, 'Relative sigma_y error'),
-        (axes[1, 2], angle_err_vals,  'Angle error (\u00b0)'),
+        (axes[1, 2], angle_err_vals,  'Angle error (\u00b0, floating modes only)'),
     ]
 
     n_cat = len(categories)

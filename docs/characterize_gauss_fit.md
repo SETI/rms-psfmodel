@@ -73,13 +73,20 @@ Copy the built-in reduced-grid test configuration to a local file:
 characterize_gauss_fit --copy-test-config-to test_config.yaml
 ```
 
+Copy the built-in high-resolution configuration to a local file:
+
+```sh
+characterize_gauss_fit --copy-hires-config-to hires_config.yaml
+```
+
 ## CLI Reference
 
 ```
 usage: characterize_gauss_fit [--config FILE] [--study NAME] [--output-dir DIR]
                                [--num-workers N] [--list-studies]
                                [--copy-default-config-to FILE]
-                               [--copy-test-config-to FILE] [--verbose]
+                               [--copy-test-config-to FILE]
+                               [--copy-hires-config-to FILE] [--verbose]
 
 Options:
   --config FILE               Path to a YAML override file merged onto
@@ -98,6 +105,8 @@ Options:
   --copy-test-config-to FILE  Write the built-in reduced-grid test
                               configuration to FILE and exit. No studies are
                               run.
+  --copy-hires-config-to FILE Write the built-in high-resolution configuration
+                              to FILE and exit. No studies are run.
   --verbose, -v               Enable DEBUG-level logging.
 ```
 
@@ -552,39 +561,34 @@ PSF pixels near the core. `num_sigma=3` is typically a good balance.
 
 ---
 
-## Bundled Test Configuration
+## Bundled Configuration Files
 
-A reduced-grid configuration file named `test_config.yaml` ships alongside
-`defaults.yaml` inside the package. It runs all eight studies with the
-smallest viable parameter grids so the entire suite completes in roughly
-30--120 seconds on a single core. Use it to verify all code paths execute
-after code changes.
+Three YAML configurations ship alongside the package source. Each can be
+copied to a local file for editing with the corresponding `--copy-*-to`
+option.
 
-### Obtaining the file
+### Default configuration (`defaults.yaml`)
 
-Use the built-in copy command to write either bundled config to a local file:
+The primary reference configuration. All parameters are set to sensible
+defaults that provide a thorough survey of each study's parameter space.
+Output is written to `./gauss_fit_results/`.
 
 ```sh
-# Copy the full default configuration
 characterize_gauss_fit --copy-default-config-to my_config.yaml
-
-# Copy the reduced-grid test configuration
-characterize_gauss_fit --copy-test-config-to test_config.yaml
 ```
 
-Both commands write the file and exit immediately — no studies are run.
-The destination must not already exist; the command fails with an error if it
-does.
+### Reduced-grid test configuration (`test_config.yaml`)
 
-### Running the test suite
+Runs all eight studies with the smallest viable parameter grids so the
+entire suite completes in roughly 30--120 seconds on a single core. Use it
+to verify that all code paths execute after code changes.
 
 ```sh
+characterize_gauss_fit --copy-test-config-to test_config.yaml
 characterize_gauss_fit --config test_config.yaml
 ```
 
 Output is written to `./gauss_fit_test/` by default.
-
-### What it covers
 
 | Study | Grid size | Approx. trials |
 |-------|-----------|----------------|
@@ -597,9 +601,47 @@ Output is written to `./gauss_fit_test/` by default.
 | `noise_sensitivity` | 4 SNR points x 1 sigma x 3 samples | 12 |
 | `hot_pixel_rejection` | 2 num_hot x 1 threshold x 1 amplitude x 3 samples | 12 |
 
-All parameters in `test_config.yaml` can themselves be overridden by a
-further user config file. For example, to run only study 1 with the test
-grid:
+### High-resolution configuration (`hires_config.yaml`)
+
+Runs all eight studies with denser parameter grids and larger
+`noise_samples` counts compared with the defaults, while staying within the
+same parameter ranges. The goal is smoother heatmaps, less noisy line plots,
+and more nuanced detail at intermediate parameter values. Estimated runtime
+is 10--30x longer than the default configuration; use `--num-workers` to
+parallelise across CPU cores.
+
+```sh
+characterize_gauss_fit --copy-hires-config-to hires_config.yaml
+characterize_gauss_fit --config hires_config.yaml --num-workers 8
+```
+
+Output is written to `./gauss_fit_hires/` by default.
+
+| Study | Denser axes | Key changes vs. defaults |
+|-------|-------------|--------------------------|
+| `box_vs_sigma` | 12 box sizes, 13 sigmas | adds 15, 19, 41 px boxes; intermediate sigma values |
+| `subpixel_offset` | 21 x 21 offset grid, 4 sigmas | 0.025 px step; adds sigma=1.5 |
+| `min_detectable_offset` | 11 deltas, 4 SNR conditions, 200 samples | adds SNR=20 condition |
+| `sigma_asymmetry_angle` | 10 ratios, 25 angle steps | 7.5 deg angular resolution |
+| `constraint_modes` | 6 sigma-error fractions, 4 PSF shapes | adds 0.1, 0.3, 0.75 fractions |
+| `background` | 7 amplitudes, degree=3, 4 ignore_center sizes | finer amplitude sweep |
+| `noise_sensitivity` | 25 SNR points, 4 sigmas, 200 samples | adds sigma=1.5; 4x more samples |
+| `hot_pixel_rejection` | 8 hot-pixel counts, 6 amplitudes, 4 thresholds, 50 samples | fills gaps in all axes |
+
+### Obtaining any bundled file
+
+All three copy commands write the file and exit immediately — no studies are
+run. The destination path must not already exist.
+
+```sh
+characterize_gauss_fit --copy-default-config-to my_config.yaml
+characterize_gauss_fit --copy-test-config-to test_config.yaml
+characterize_gauss_fit --copy-hires-config-to hires_config.yaml
+```
+
+All parameters in any bundled config can be further overridden by combining
+it with a second user config file or with CLI flags. For example, to run
+only study 1 with the test grid:
 
 ```sh
 characterize_gauss_fit --config test_config.yaml --study box_vs_sigma

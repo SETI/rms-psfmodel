@@ -191,7 +191,16 @@ def _write_outputs(
     sigma_labels = [f'{s:.2g}' for s in sigmas]
 
     # Line plots: one per condition, three metrics (Euclidean, Y-axis, X-axis).
-    for _noise_rms, cond_label in conditions:
+    for noise_rms, cond_label in conditions:
+        noise_desc = (
+            'noiseless (1 trial per point -- numerical precision floor)'
+            if noise_rms == 0.0
+            else (
+                f'Gaussian noise, noise_rms = {noise_rms:.3g}'
+                f' (SNR = scale / noise_rms = {scale / noise_rms:.0f});'
+                f' {study.noise_samples} independent trials per point'
+            )
+        )
         for metric_attr, metric_label, fname_prefix in [
             ('pos_err',   'Mean position error (Euclidean, pixels)', 'pos_err'),
             ('pos_err_y', 'Mean |pos_err_y| (pixels)',               'pos_err_y'),
@@ -229,14 +238,18 @@ def _write_outputs(
                 y_stds,
                 labels=line_labels,
                 title=f'Min detectable offset ({metric_label}) -- {cond_label}',
-                xlabel='Injected offset delta (pixels)',
+                xlabel='Injected X offset (pixels)',
                 ylabel=metric_label,
                 log_x=True,
                 log_y=True,
                 note=(
-                    f'box_size={study.box_size}, '
-                    f'{study.noise_samples} noise samples/condition, '
-                    f'offset varies as (\u03b4, \u03b4)'
+                    f'PSF: sigma_y = sigma_x = sigma (see series label); angle = 0\u00b0 (fixed);'
+                    f' box_size = {study.box_size} px; scale = {scale:.2g}\n'
+                    f'Offset: Y = 0 px (fixed); X = delta (x-axis only); all positional offset'
+                    f' is injected in the X direction\n'
+                    f'Noise: {noise_desc}\n'
+                    f'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
+                    f' no background subtraction'
                 ),
             )
             save_figure(fig, study_dir, f'{_STUDY_NAME}_{fname_prefix}_{cond_label}.png')
@@ -255,13 +268,20 @@ def _write_outputs(
             rec_grid,
             delta_labels,
             sigma_labels,
-            title=f'Recovery fraction -- {cond_label}',
-            xlabel='Injected offset delta (pixels)',
+            title=(
+                f'Recovery fraction (pos_err < delta/2) -- {cond_label}'
+            ),
+            xlabel='Injected X offset / delta (pixels)',
             ylabel='Sigma (pixels)',
             note=(
-                f'box_size={study.box_size}, '
-                f'{study.noise_samples} noise samples/condition, '
-                f'offset varies as (\u03b4, \u03b4)'
+                f'PSF: sigma_y = sigma_x = sigma (y-axis); angle = 0\u00b0 (fixed);'
+                f' box_size = {study.box_size} px; scale = {scale:.2g}\n'
+                f'Offset: Y = 0 px (fixed); X = delta (x-axis); all offset in X only\n'
+                f'Noise: Gaussian, noise_rms = {noise_rms:.3g}'
+                f' (SNR = {scale / noise_rms:.0f}); {study.noise_samples} trials per cell\n'
+                f'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
+                f' no background subtraction\n'
+                f'Recovery = fraction of trials where Euclidean pos_err < delta / 2'
             ),
         )
         save_figure(fig, study_dir, f'{_STUDY_NAME}_recovery_{cond_label}.png')

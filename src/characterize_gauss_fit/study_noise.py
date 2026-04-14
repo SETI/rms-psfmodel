@@ -199,8 +199,14 @@ def _write_outputs(
             log_x=True,
             log_y=True,
             note=(
-                f'box_size={study.box_size}, angle=0\u00b0, offset randomized, '
-                f'{study.noise_samples} samples/pt, \u03c3 fitted freely'
+                f'PSF: sigma_y = sigma_x = sigma (see series label); angle = 0\u00b0 (fixed);'
+                f' box_size = {study.box_size} px; scale = {scale:.2g}\n'
+                f'Offset: Y and X each drawn independently from Uniform[\u22120.5, +0.5] px'
+                f' per trial (different subpixel position every trial)\n'
+                f'Noise: Gaussian, noise_rms = scale / SNR (x-axis);'
+                f' {study.noise_samples} independent trials per (sigma, SNR) point\n'
+                f'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
+                f' no background subtraction'
             ),
         )
         save_figure(fig, study_dir, f'{_STUDY_NAME}_{fname}')

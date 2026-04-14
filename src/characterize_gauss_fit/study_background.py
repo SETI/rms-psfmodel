@@ -155,6 +155,7 @@ def _write_outputs(
         study_dir: Output subdirectory.
     """
     study = cfg.studies.background
+    scale = cfg.generation.scale
     fit_degrees = _compute_fit_degrees(study)
 
     bkgnd_types = study.background_types
@@ -210,8 +211,16 @@ def _write_outputs(
 
                 ic_str = f'{ignore_center[0]}x{ignore_center[1]}'
                 bkgnd_note = (
-                    f'\u03c3=({study.sigma[0]:.1f},{study.sigma[1]:.1f}) px, '
-                    f'box={study.box_size}, noiseless, \u03c3 and angle fitted freely'
+                    f'PSF: sigma_y = {study.sigma[0]:.1f}, sigma_x = {study.sigma[1]:.1f} px'
+                    f' (fixed); angle = 0\u00b0 (fixed); box_size = {study.box_size} px;'
+                    f' scale = {scale:.2g}; one noiseless trial per cell\n'
+                    f'Offset: Y = {offset_y:+.2f}, X = {offset_x:+.2f} px from pixel centre'
+                    f' (fixed; one heatmap set per offset pair)\n'
+                    f'Background: type on y-axis; amplitude = {amplitude:.2g} \u00d7 PSF peak'
+                    f' (see title); no Gaussian detector noise added\n'
+                    f'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
+                    f' bkgnd_degree on x-axis (null = no subtraction);'
+                    f' bkgnd_ignore_center = {ic_str} (see title)'
                 )
                 for hmap, metric_label, fsuffix in [
                     (grid,   'Position error (Euclidean)',  ''),

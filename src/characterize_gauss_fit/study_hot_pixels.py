@@ -173,6 +173,8 @@ def _write_outputs(
         study_dir: Output subdirectory.
     """
     study = cfg.studies.hot_pixel_rejection
+    scale = cfg.generation.scale
+    noise_rms_val = scale / study.snr
 
     num_sigma_list = _make_num_sigma_list(study.num_sigma_with_null, study.num_sigma_values)
 
@@ -194,10 +196,16 @@ def _write_outputs(
 
     for ha_idx, hot_amp in enumerate(hot_amps):
         plot_note = (
-            f'\u03c3=({study.sigma[0]:.1f},{study.sigma[1]:.1f}) px, '
-            f'box={study.box_size}, '
-            f'offset=({study.offset[0]:+.2f},{study.offset[1]:+.2f}), '
-            f'SNR={study.snr:.0f}, {study.noise_samples} samples/pt'
+            f'PSF: sigma_y = {study.sigma[0]:.1f}, sigma_x = {study.sigma[1]:.1f} px (fixed);'
+            f' angle = 0\u00b0 (fixed); box_size = {study.box_size} px; scale = {scale:.2g}\n'
+            f'Offset: Y = {study.offset[0]:+.2f}, X = {study.offset[1]:+.2f} px from pixel'
+            f' centre (fixed for all trials)\n'
+            f'Noise: Gaussian, noise_rms = {noise_rms_val:.3g} (SNR = {study.snr:.0f});'
+            f' {study.noise_samples} independent trials per condition;'
+            f' hot-pixel positions randomized per trial\n'
+            f'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
+            f' num_sigma rejection = series label (see legend);'
+            f' hot-pixel amplitude = {hot_amp:.0f}\u00d7 PSF peak (see title)'
         )
         # --- Convergence-rate plot -------------------------------------------
         conv_means = _convergence_means(num_sigma_list, n_hot_list, hot_amp, bucket_map)

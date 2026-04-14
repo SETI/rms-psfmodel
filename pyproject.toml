@@ -64,7 +64,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 psfmodel = ["py.typed"]
-characterize_gauss_fit = ["defaults.yaml", "test_config.yaml"]
+characterize_gauss_fit = ["defaults.yaml", "test_config.yaml", "hires_config.yaml"]
 
 [tool.setuptools_scm]
 local_scheme = "no-local-version"

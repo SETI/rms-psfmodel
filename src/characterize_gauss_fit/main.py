@@ -131,6 +131,16 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        '--copy-hires-config-to',
+        metavar='FILE',
+        type=pathlib.Path,
+        default=None,
+        help=(
+            'Write the built-in high-resolution configuration to FILE and exit. '
+            'No studies are run.'
+        ),
+    )
+    parser.add_argument(
         '--verbose',
         '-v',
         action='store_true',
@@ -200,6 +210,10 @@ def main() -> None:
 
     if args.copy_test_config_to is not None:
         _copy_bundled_config('test_config.yaml', args.copy_test_config_to)
+        return
+
+    if args.copy_hires_config_to is not None:
+        _copy_bundled_config('hires_config.yaml', args.copy_hires_config_to)
         return
 
     _configure_logging(args.verbose)

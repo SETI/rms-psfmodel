@@ -222,7 +222,8 @@ def _write_outputs(
     n_modes = len(modes)
 
     shape_labels = [
-        f's=({s.sigma[0]:.1f},{s.sigma[1]:.1f}),a={s.angle:.2f}' for s in study.psf_shapes
+        f's=({s.sigma[0]:.1f},{s.sigma[1]:.1f}),a={math.degrees(s.angle):.0f}\u00b0'
+        for s in study.psf_shapes
     ]
     mode_labels = [m.label for m in modes]
 
@@ -259,9 +260,16 @@ def _write_outputs(
         angle_err_vals,
         title='Effect of parameter constraints on fitting accuracy',
         note=(
-            f'box={study.box_size}, '
-            f'offset=({study.offset[0]:+.2f},{study.offset[1]:+.2f}), '
-            f'noiseless, scale={study.scale:.0f}'
+            f'PSF: sigma and angle from each shape (see legend); box_size = {study.box_size} px;'
+            f' offset = ({study.offset[0]:+.2f}, {study.offset[1]:+.2f}) px;'
+            f' scale = {study.scale:.2g}; one noiseless trial per (mode, shape)\n'
+            f'Background / noise: none injected\n'
+            f'Fitting: varies by x-axis mode -- "all_float" = sigma_y, sigma_x, angle all float;'
+            f' "sigma_fixed_*" = sigmas locked to stated value; "angle_fixed_*" = angle locked;\n'
+            f'  "_correct" = fixed at true value; "_errors" = fixed at true value'
+            f' + sigma_error_frac or'
+            f' + {study.angle_error_rad:.2f} rad'
+            f' ({math.degrees(study.angle_error_rad):.0f}\u00b0)'
         ),
     )
     save_figure(fig, study_dir, f'{_STUDY_NAME}_summary.png')

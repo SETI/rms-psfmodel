@@ -197,7 +197,7 @@ studies:
     # These values override fitting.num_sigma for the PSF-fit bad-pixel
     # rejection stage.  The study iterates over num_sigma_values (and over
     # null when num_sigma_with_null is true) to test rejection aggressiveness.
-    num_sigma_values: [2.0, 3.0, 5.0]
+    num_sigma_values: [3.0, 4.0, 5.0, 6.0]
     # If true, also test with num_sigma=null (rejection disabled).
     num_sigma_with_null: true
     # Hot pixel amplitudes as multiples of the PSF peak.

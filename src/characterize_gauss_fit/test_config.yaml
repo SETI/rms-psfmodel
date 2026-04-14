@@ -103,7 +103,7 @@ studies:
   hot_pixel_rejection:
     enabled: true
     num_hot_pixels: [0, 3]
-    num_sigma_values: [3.0]
+    num_sigma_values: [3.0, 5.0]
     num_sigma_with_null: false
     hot_amplitudes: [20.0]
     noise_samples: 3
