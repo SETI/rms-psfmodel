@@ -24,6 +24,13 @@ except ImportError:  # pragma: no cover
 _FIT_PSF_BASE_BOUND_MIN = float('-inf')
 _FIT_PSF_BASE_BOUND_MAX = float('inf')
 
+# Finite-difference step sizes used by :meth:`PSF._find_position` when computing
+# the Jacobian of the residual vector for covariance estimation.  The step for
+# parameter ``p`` is ``max(|p| * _JACO_REL_EPS, _JACO_ABS_EPS)`` so the step is
+# proportional to the parameter magnitude but never smaller than the absolute floor.
+_JACO_REL_EPS: float = 1e-5
+_JACO_ABS_EPS: float = 1e-7
+
 
 class PSF(ABC):
     """Abstract base for 2-D point-spread models used in fitting and rendering.
@@ -594,13 +601,23 @@ class PSF(ABC):
             containing::
 
                 'x'                    The offset in X. (Same as pos_x)
-                'x_err'                Uncertainty in X.
+                'x_err'                1-sigma uncertainty in X (pixels).
                 'y'                    The offset in Y. (Same as pos_y)
-                'y_err'                Uncertainty in Y.
+                'y_err'                1-sigma uncertainty in Y (pixels).
                 'scale'                The best fit PSF scale.
-                'scale_err'            Uncertainty in PSF scale.
+                'scale_err'            1-sigma uncertainty in PSF scale.
                 'base'                 The best fit PSF base.
-                'base_err'             Uncertainty in PSF base.
+                'base_err'             1-sigma uncertainty in PSF base; 0.0
+                                       when allow_nonzero_base is False.
+                'residual_rss'         Sum of squared residuals over unmasked
+                                       pixels.
+                'reduced_chi2'         residual_rss divided by degrees of
+                                       freedom (n_valid - n_params); near 1.0
+                                       for a noise-limited fit.
+                'noise_rms'            Per-pixel noise estimate from residuals:
+                                       sqrt(rss / n_valid).
+                'peak_snr'             Amplitude signal-to-noise ratio:
+                                       scale / noise_rms.
                 'subimg'               The box_size area of the original image
                                        surrounding starting_point masked as
                                        necessary using the num_sigma threshold.
@@ -611,19 +628,15 @@ class PSF(ABC):
                 'gradient'             The box_size background gradient.
                 'subimg-gradient'      The subimg with the background gradient
                                        subtracted.
-                'psf'                  The PSF model from eval_rect with the fitted
-                                       scale and base (same array as scaled_psf).
+                'psf'                  The PSF model from eval_rect with the
+                                       fitted scale and base (same array as
+                                       scaled_psf).
                 'scaled_psf'           Same as psf; model to compare to
                                        subimg-gradient during outlier rejection.
-                'leastsq_cov'          The covariance matrix returned by leastsq
-                                       as adjusted by the residual variance.
-                'leastsq_infodict'     The infodict returned by leastsq.
-                'leastsq_mesg'         The mesg returned by leastsq.
-                'leastsq_ier'          The ier returned by leastsq.
 
             In addition, metadata includes two entries for each "additional
             parameter" used during optimization: one for the value and one for
-            the uncertainty ('param' and 'param_err').
+            the 1-sigma uncertainty (``'param'`` and ``'param_err'``).
         """
 
         if box_size[0] < 0 or box_size[1] < 0 or box_size[0] % 2 != 1 or box_size[1] % 2 != 1:
@@ -755,11 +768,11 @@ class PSF(ABC):
 
         if self.detailed_logging:
             msg = f'find_position returning Y {res_y + starting_pix[0]:.4f}'
-            # if details['y_err'] is not None:
-            #     msg += f' +/- {details["y_err"]:.4f}'
+            if details['y_err'] is not None:
+                msg += f' +/- {details["y_err"]:.4f}'
             msg += f' X {res_x + starting_pix[1]:.4f}'
-            # if details['x_err'] is not None:
-            #     msg += ' +/- {details["x_err"]:.4f}'
+            if details['x_err'] is not None:
+                msg += f' +/- {details["x_err"]:.4f}'
             if details['scale'] is not None:
                 msg += f' Scale {details["scale"]:.4f} Base {details["base"]:.4f}'
             if 'sigma_y' in details:
@@ -946,16 +959,21 @@ class PSF(ABC):
               solution; identical arrays (``scaled_psf`` supports comparison to
               ``subimg-gradient`` in the outer :meth:`find_position` loop).
 
+            - ``'residual_rss'``: sum of squared residuals over unmasked pixels (float).
+            - ``'reduced_chi2'``: ``residual_rss / max(n_valid - n_params, 1)``; near 1
+              for a well-matched noise model (float).
+            - ``'noise_rms'``: per-pixel noise estimate ``sqrt(rss / n_valid)`` (float).
+            - ``'peak_snr'``: ``scale / noise_rms``; amplitude signal-to-noise ratio
+              (float; 0.0 if ``noise_rms`` is zero).
+            - ``'y_err'``, ``'x_err'``: 1-sigma position uncertainties in pixels (float).
+            - ``'scale_err'``: 1-sigma uncertainty on the fitted ``scale`` (float).
+            - ``'base_err'``: 1-sigma uncertainty on ``base``; 0.0 when
+              ``allow_nonzero_base`` is False (float).
+
             Subclasses append one entry per additional PSF parameter (for example
             ``'sigma_y'`` and ``'sigma_x'`` for :class:`~psfmodel.gaussian.GaussianPSF`),
-            using the internal names from ``_additional_params``.
-
-        Note:
-            Optimizer ``status``, ``message``, and the final objective value are not
-            stored in ``details``; with instance ``detailed_logging`` they may appear in
-            DEBUG logs. Uncertainty keys (``'x_err'``, etc.) and least-squares metadata
-            described on :meth:`find_position` are not populated by the current
-            implementation.
+            using the internal names from ``_additional_params``, plus a corresponding
+            ``'<name>_err'`` uncertainty key for each.
         """
 
         bkgnd_params = None
@@ -1085,54 +1103,94 @@ class PSF(ABC):
         details['base'] = base
         details['scaled_psf'] = psf
 
-        # if cov_x is None:
-        #     details['leastsq_cov'] = None
-        #     details['x_err'] = None
-        #     details['y_err'] = None
-        #     details['scale_err'] = None
-        #     details['base_err'] = None
-        #     for i, ap in enumerate(self._additional_params):
-        #         details[ap[2]+'_err'] = None
-        # else:
-        #     # "To obtain the covariance matrix of the parameters x, cov_x must
-        #     #  be multiplied by the variance of the residuals"
-        #     dof = psf.shape[0]*psf.shape[1]-len(result)
-        #     resid_var = np.sum(self._fit_psf_func(result, *extra_args)**2) / dof
-        #     cov = cov_x * resid_var  # In angle-parameter space!! (if
-        # use_angular_params)
-        #     details['leastsq_cov'] = cov
-        #     if use_angular_params:
-        #         # Deriv of SL0 * sin(R0) is
-        #         #   SL0 * cos(R0) * dR0
-        #         y_err = np.abs((np.sqrt(cov[0][0]) % (np.pi*2)) *
-        #                        search_limit[0] * np.cos(result[0]))
-        #         x_err = np.abs((np.sqrt(cov[1][1]) % (np.pi*2)) *
-        #                        search_limit[1] * np.cos(result[1]))
-        #         # Deriv of SC/2 * (sin(R)+1) = SC/2 * sin(R) + SC/2 is
-        #         #   SC/2 * cos(R) * dR
-        #         scale_err = np.abs((np.sqrt(cov[2][2]) % (np.pi*2)) *
-        #                            scale_limit/2 * np.cos(result[2]))
-        #         details['x_err'] = x_err
-        #         details['y_err'] = y_err
-        #         details['scale_err'] = scale_err
-        #         for i, ap in enumerate(self._additional_params):
-        #             err = np.abs((np.sqrt(cov[i+3][i+3]) % (np.pi*2)) *
-        #                          (ap[1]-ap[0])/2 * np.cos(result[i+3]))
-        #             details[ap[2]+'_err'] = err
-        #     else:
-        #         details['x_err'] = np.sqrt(cov[0][0])
-        #         details['y_err'] = np.sqrt(cov[1][1])
-        #         details['scale_err'] = np.sqrt(cov[2][2])
-        #         for i, ap in enumerate(self._additional_params):
-        #             details[ap[2]+'_err'] = np.sqrt(cov[i+result_end][i+result_end])
-        #     # Note the base is not computed using angles
-        #     details['base_err'] = None
-        #     if allow_nonzero_base:
-        #         details['base_err'] = np.sqrt(cov[3][3])
+        # --- Quality metrics ---
+        # Residuals between the background-subtracted data and the fitted model,
+        # restricted to unmasked pixels, are the basis for all quality metrics and
+        # uncertainty estimates.
+        _diff = sub_img_grad - psf
+        if isinstance(_diff, ma.MaskedArray):
+            _resid_flat = ma.compressed(_diff).astype(np.float64)
+        else:
+            _resid_flat = _diff.flatten().astype(np.float64)
 
-        # details['leastsq_infodict'] = infodict
-        # details['leastsq_mesg'] = mesg
-        # details['leastsq_ier'] = ier
+        _n_valid = int(_resid_flat.size)
+        _n_params_fit = 3 + int(allow_nonzero_base) + len(self._additional_params)
+        _rss = float(np.dot(_resid_flat, _resid_flat))
+        _dof = max(_n_valid - _n_params_fit, 1)
+        _reduced_chi2 = _rss / _dof
+        _noise_rms = float(np.sqrt(_rss / _n_valid)) if _n_valid > 0 else 0.0
+        _peak_snr = float(scale / _noise_rms) if _noise_rms > 0.0 else 0.0
+
+        details['residual_rss'] = _rss
+        details['reduced_chi2'] = _reduced_chi2
+        details['noise_rms'] = _noise_rms
+        details['peak_snr'] = _peak_snr
+
+        # --- Parameter uncertainties via finite-difference Jacobian ---
+        # Physical parameter vector in canonical order:
+        #   [offset_y, offset_x, scale, (base if allow_nonzero_base), *additional...]
+        _phys: list[float] = [float(offset_y), float(offset_x), float(scale)]
+        if allow_nonzero_base:
+            _phys.append(float(base))
+        for _ap in self._additional_params:
+            _phys.append(float(addl_vals_dict[_ap[2]]))
+
+        _n_phys = len(_phys)
+
+        # Build the residual vector at an arbitrary physical-parameter point, applying
+        # the same masking as the final fit so the Jacobian is consistent.
+        def _residuals_at_phys(phys: list[float]) -> npt.NDArray[np.float64]:
+            _oy = phys[0]
+            _ox = phys[1]
+            _sc = phys[2]
+            _bs = phys[3] if allow_nonzero_base else 0.0
+            _start = 4 if allow_nonzero_base else 3
+            _extra: dict[str, Any] = {
+                _ap2[2]: phys[_start + _i2] for _i2, _ap2 in enumerate(self._additional_params)
+            }
+            _model = self.eval_rect(
+                cast(tuple[int, int], sub_img_grad.shape),
+                (_oy, _ox),
+                scale=_sc,
+                base=_bs,
+                **_extra,
+            )
+            _d = sub_img_grad - _model
+            if isinstance(_d, ma.MaskedArray):
+                return ma.compressed(_d).astype(np.float64)
+            return _d.flatten().astype(np.float64)
+
+        # Forward-difference Jacobian of the residual vector in physical space.
+        _jac = np.zeros((_n_valid, _n_phys), dtype=np.float64)
+        for _col in range(_n_phys):
+            _val = _phys[_col]
+            _eps = max(abs(_val) * _JACO_REL_EPS, _JACO_ABS_EPS)
+            _phys_plus = list(_phys)
+            _phys_plus[_col] += _eps
+            _r_plus = _residuals_at_phys(_phys_plus)
+            _jac[:, _col] = (_r_plus - _resid_flat) / _eps
+
+        # Covariance = reduced_chi2 * (J^T J)^{-1}; use lstsq for robustness when
+        # J^T J is ill-conditioned (e.g. underconstrained fits).
+        _jtj = _jac.T @ _jac
+        _cov_raw, _, _, _ = np.linalg.lstsq(_jtj, np.eye(_n_phys), rcond=None)
+        _cov = _cov_raw * _reduced_chi2
+
+        # Diagonal 1-sigma uncertainties; negative variances (numerical noise) are
+        # clamped to zero before taking the square root.
+        _uncertainties = np.sqrt(np.maximum(np.diag(_cov), 0.0))
+
+        details['y_err'] = float(_uncertainties[0])
+        details['x_err'] = float(_uncertainties[1])
+        details['scale_err'] = float(_uncertainties[2])
+        _u_start = 3
+        if allow_nonzero_base:
+            details['base_err'] = float(_uncertainties[3])
+            _u_start = 4
+        else:
+            details['base_err'] = 0.0
+        for _i, _ap in enumerate(self._additional_params):
+            details[_ap[2] + '_err'] = float(_uncertainties[_u_start + _i])
 
         for key in addl_vals_dict:
             details[key] = addl_vals_dict[key]

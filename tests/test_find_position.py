@@ -171,3 +171,133 @@ def test_find_position_num_sigma_rejects_outlier_pixel(default_psf: GaussianPSF)
     assert ret is not None
     assert ret[0] == pytest.approx(10.5, abs=0.5)
     assert ret[1] == pytest.approx(10.5, abs=0.5)
+
+
+# ---------------------------------------------------------------------------
+# Quality-metric tests (reduced_chi2, noise_rms, peak_snr, residual_rss)
+# ---------------------------------------------------------------------------
+
+
+def test_find_position_quality_metrics_noise_free(default_psf: GaussianPSF) -> None:
+    """Quality metrics are near-zero for a noise-free Gaussian image."""
+
+    img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
+    ret = default_psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0)
+    assert ret is not None
+    _, _, details = ret
+    assert details['residual_rss'] < 1e-10
+    assert details['reduced_chi2'] < 1e-10
+    assert details['noise_rms'] < 1e-5
+    assert details['peak_snr'] > 1e6
+
+
+def test_find_position_quality_metrics_noisy() -> None:
+    """``reduced_chi2`` approximates per-pixel noise variance for a noisy fit."""
+
+    psf = GaussianPSF(sigma=(1.0, 1.0))
+    rng = np.random.default_rng(42)
+    noise_std = 0.05
+    img = psf.eval_rect((21, 21), scale=1.0) + rng.normal(0, noise_std, (21, 21))
+    ret = psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0)
+    assert ret is not None
+    _, _, details = ret
+    assert details['reduced_chi2'] == pytest.approx(noise_std**2, rel=0.3)
+    assert details['noise_rms'] == pytest.approx(noise_std, rel=0.2)
+    assert details['peak_snr'] == pytest.approx(1.0 / noise_std, rel=0.3)
+
+
+def test_find_position_quality_metrics_keys_present(default_psf: GaussianPSF) -> None:
+    """All four quality-metric keys are present in the returned details dict."""
+
+    img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
+    ret = default_psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0)
+    assert ret is not None
+    _, _, details = ret
+    for key in ('residual_rss', 'reduced_chi2', 'noise_rms', 'peak_snr'):
+        assert key in details
+        assert details[key] >= 0.0
+
+
+# ---------------------------------------------------------------------------
+# Parameter-uncertainty tests (x_err, y_err, scale_err, base_err, *_err)
+# ---------------------------------------------------------------------------
+
+
+def test_find_position_position_uncertainties_non_negative(default_psf: GaussianPSF) -> None:
+    """Position and scale uncertainties are non-negative for a clean Gaussian fit."""
+
+    img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
+    ret = default_psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0)
+    assert ret is not None
+    _, _, details = ret
+    assert details['x_err'] >= 0.0
+    assert details['y_err'] >= 0.0
+    assert details['scale_err'] >= 0.0
+
+
+def test_find_position_position_uncertainties_small_noise_free(default_psf: GaussianPSF) -> None:
+    """Position uncertainties are negligible for a noise-free image."""
+
+    img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
+    ret = default_psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0)
+    assert ret is not None
+    _, _, details = ret
+    assert details['x_err'] < 1e-3
+    assert details['y_err'] < 1e-3
+
+
+def test_find_position_base_err_zero_when_base_fixed(default_psf: GaussianPSF) -> None:
+    """``base_err`` is exactly 0.0 when ``allow_nonzero_base=False``."""
+
+    img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
+    ret = default_psf.find_position(
+        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0, allow_nonzero_base=False
+    )
+    assert ret is not None
+    assert ret[2]['base_err'] == 0.0
+
+
+def test_find_position_base_err_non_negative_when_base_free(default_psf: GaussianPSF) -> None:
+    """``base_err`` is non-negative when ``allow_nonzero_base=True``."""
+
+    img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
+    ret = default_psf.find_position(
+        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0, allow_nonzero_base=True
+    )
+    assert ret is not None
+    assert ret[2]['base_err'] >= 0.0
+
+
+def test_find_position_additional_param_err_keys_present() -> None:
+    """GaussianPSF with floating sigma includes ``sigma_y_err`` and ``sigma_x_err`` in details."""
+
+    psf = GaussianPSF(
+        sigma=(None, None),
+        sigma_y_range=(0.5, 3.0),
+        sigma_x_range=(0.5, 3.0),
+    )
+    img = psf.eval_rect((21, 21), scale=2.0, sigma=(1.5, 1.5))
+    ret = psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0)
+    assert ret is not None
+    _, _, details = ret
+    assert 'sigma_y_err' in details
+    assert 'sigma_x_err' in details
+    assert details['sigma_y_err'] >= 0.0
+    assert details['sigma_x_err'] >= 0.0
+
+
+def test_find_position_uncertainty_decreases_with_snr() -> None:
+    """Higher-SNR images produce smaller position uncertainties."""
+
+    psf = GaussianPSF(sigma=(1.0, 1.0))
+    rng = np.random.default_rng(99)
+    noise = rng.normal(0, 0.1, (21, 21))
+    img_low = psf.eval_rect((21, 21), scale=0.5) + noise
+    img_high = psf.eval_rect((21, 21), scale=5.0) + noise
+
+    ret_low = psf.find_position(img_low, (21, 21), (10, 10), bkgnd_degree=None, num_sigma=0)
+    ret_high = psf.find_position(img_high, (21, 21), (10, 10), bkgnd_degree=None, num_sigma=0)
+    assert ret_low is not None
+    assert ret_high is not None
+    assert ret_low[2]['x_err'] > ret_high[2]['x_err']
+    assert ret_low[2]['y_err'] > ret_high[2]['y_err']
