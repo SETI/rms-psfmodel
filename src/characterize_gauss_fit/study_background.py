@@ -210,11 +210,11 @@ def _write_outputs(
                     f' (fixed); angle = 0\u00b0 (fixed); box_size = {study.box_size} px;'
                     f' scale = {scale:.2g}; one noiseless trial per cell\n'
                     f'Offset: Y = {offset_y:+.2f}, X = {offset_x:+.2f} px from pixel centre'
-                    f' (fixed; one heatmap set per offset pair)\n'
+                    ' (fixed; one heatmap set per offset pair)\n'
                     f'Background: type on y-axis; amplitude = {amplitude:.2g} \u00d7 PSF peak'
-                    f' (see title); no Gaussian detector noise added\n'
-                    f'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
-                    f' bkgnd_degree on x-axis (null = no subtraction);'
+                    ' (see title); no Gaussian detector noise added\n'
+                    'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
+                    ' bkgnd_degree on x-axis (null = no subtraction);'
                     f' bkgnd_ignore_center = {ic_str} (see title)'
                 )
                 for hmap, metric_label, fsuffix in [

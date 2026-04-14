@@ -262,6 +262,24 @@ def ensure_study_dir(output_dir: pathlib.Path, study_name: str) -> pathlib.Path:
     return study_dir
 
 
+def snr_to_noise_rms(snr: float, scale: float) -> float:
+    """Convert signal-to-noise ratio to noise RMS.
+
+    Parameters:
+        snr: Signal-to-noise ratio (PSF peak / noise std). Must be positive.
+        scale: PSF amplitude scale factor (determines peak value).
+
+    Returns:
+        Corresponding noise standard deviation (``scale / snr``).
+
+    Raises:
+        ValueError: If ``snr`` is not positive.
+    """
+    if snr <= 0:
+        raise ValueError(f'snr must be > 0, got {snr}')
+    return scale / snr
+
+
 def recovery_fraction(
     results: list[TrialResult],
     *,

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import pathlib
 from collections.abc import Sequence
+from typing import Any
 
 import matplotlib
 import matplotlib.patheffects as _pe
@@ -44,7 +45,7 @@ _HEATMAP_TEXT_EFFECTS = [_pe.withStroke(linewidth=3, foreground='white')]
 _BANDS_NOTE = 'Shaded bands: mean \u00b1 1 std.\u202fdev. across repeated trials'
 
 # Style used for all figure footnotes.
-_NOTE_STYLE: dict[str, object] = {
+_NOTE_STYLE: dict[str, Any] = {
     'ha': 'center',
     'va': 'bottom',
     'fontsize': 7,
@@ -75,7 +76,7 @@ def _add_figure_note(fig: Figure, note: str, *, bottom: float = 0.12) -> None:
     kw = dict(_NOTE_STYLE)
     kw['transform'] = fig.transFigure
     # Place note text just above the figure bottom edge, inside the reserved strip.
-    fig.text(0.5, 0.005, note, **kw)  # type: ignore[arg-type]
+    fig.text(0.5, 0.005, note, **kw)
     # Single tight_layout call: everything (axes + labels) goes in the rect
     # above the note strip, so x-axis title never overlaps the note.
     fig.tight_layout(rect=(0.0, actual_bottom, 1.0, 1.0))

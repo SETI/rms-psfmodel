@@ -263,11 +263,11 @@ def _write_outputs(
             f'PSF: sigma and angle from each shape (see legend); box_size = {study.box_size} px;'
             f' offset = ({study.offset[0]:+.2f}, {study.offset[1]:+.2f}) px;'
             f' scale = {study.scale:.2g}; one noiseless trial per (mode, shape)\n'
-            f'Background / noise: none injected\n'
-            f'Fitting: varies by x-axis mode -- "all_float" = sigma_y, sigma_x, angle all float;'
-            f' "sigma_fixed_*" = sigmas locked to stated value; "angle_fixed_*" = angle locked;\n'
-            f'  "_correct" = fixed at true value; "_errors" = fixed at true value'
-            f' + sigma_error_frac or'
+            'Background / noise: none injected\n'
+            'Fitting: varies by x-axis mode -- "all_float" = sigma_y, sigma_x, angle all float;'
+            ' "sigma_fixed_*" = sigmas locked to stated value; "angle_fixed_*" = angle locked;\n'
+            '  "_correct" = fixed at true value; "_errors" = fixed at true value'
+            ' + sigma_error_frac or'
             f' + {study.angle_error_rad:.2f} rad'
             f' ({math.degrees(study.angle_error_rad):.0f}\u00b0)'
         ),
@@ -276,16 +276,16 @@ def _write_outputs(
 
     write_csv(cfg.output_dir, _STUDY_NAME, specs, results)
 
-    # Precompute position index for O(1) grouping lambda access.
-    spec_index: dict[int, int] = {id(s): i for i, s in enumerate(specs)}
-    groups: list[dict[str, Any]] = utils.build_groups_by_keys(
-        specs,
-        results,
-        [
-            ('constraint_mode_idx', lambda s: spec_index[id(s)] // n_shapes),
-            ('psf_shape_idx', lambda s: spec_index[id(s)] % n_shapes),
-        ],
-    )
+    # Each (mode, shape) pair maps to exactly one spec at a known position.
+    groups: list[dict[str, Any]] = [
+        {
+            'constraint_mode_idx': m_idx,
+            'psf_shape_idx': s_idx,
+            'indices': [m_idx * n_shapes + s_idx],
+        }
+        for m_idx in range(n_modes)
+        for s_idx in range(n_shapes)
+    ]
     write_json_summary(
         cfg.output_dir,
         _STUDY_NAME,

@@ -211,6 +211,7 @@ class PSF(ABC):
         *,
         scale: float = 1.0,
         base: float = 0.0,
+        **kwargs: Any,
     ) -> npt.NDArray[np.float64]:
         """Pixel-integrated rectangular PSF; internal counterpart to :meth:`eval_rect`.
 
@@ -248,7 +249,7 @@ class PSF(ABC):
         scale: float = 1.0,
         base: float = 0.0,
         **kwargs: Any,
-    ) -> npt.NDArray[np.floating]:
+    ) -> npt.NDArray[np.float64]:
         """Evaluate and sum a PSF multiple times to simulate motion blur.
 
         Parameters:
@@ -373,7 +374,7 @@ class PSF(ABC):
         debug: bool = False,
         *,
         logger: logging.Logger | None = None,
-    ) -> tuple[npt.NDArray[np.float64] | None, npt.NDArray[np.float64] | None]:
+    ) -> tuple[npt.NDArray[np.float64] | None, npt.NDArray[np.bool_] | None]:
         """Return the polynomial fit to the pixels of an image.
 
         Parameters:
@@ -446,7 +447,7 @@ class PSF(ABC):
         a3d = PSF._background_gradient_coeffs(shape, order)
 
         if num_sigma is not None:
-            num_bad_pixels = cast(int, ma.count_masked(image))  # type: ignore
+            num_bad_pixels = cast(int, ma.count_masked(image))  # type: ignore[no-untyped-call]
             if debug:  # pragma: no cover
                 fit_logger.debug(
                     'Background gradient fit: initial masked pixel count %s', num_bad_pixels
@@ -459,7 +460,7 @@ class PSF(ABC):
 
             if is_masked:
                 # linalg doesn't support masked arrays!
-                a2d = a2d[~b1d.mask]  # type: ignore
+                a2d = a2d[~cast(npt.NDArray[np.bool_], ma.getmaskarray(b1d))]
                 b1d = ma.compressed(b1d)
 
             if a2d.shape[0] < a2d.shape[1]:  # Underconstrained
@@ -496,7 +497,7 @@ class PSF(ABC):
             outlier_mask = ma.filled(ma.abs(delta_img) >= threshold, False)
             image[outlier_mask] = ma.masked
 
-            new_num_bad_pixels = cast(int, ma.count_masked(image))  # type: ignore
+            new_num_bad_pixels = cast(int, ma.count_masked(image))  # type: ignore[no-untyped-call]
             if debug:  # pragma: no cover
                 fit_logger.debug(
                     'Background gradient fit: masked pixel count now %s', new_num_bad_pixels
@@ -506,7 +507,7 @@ class PSF(ABC):
             num_bad_pixels = new_num_bad_pixels
 
         if is_masked:
-            return coeffts, ma.getmaskarray(image)  # type: ignore
+            return coeffts, ma.getmaskarray(image)
         else:
             return coeffts, np.zeros(shape, dtype=np.bool_)
 
@@ -559,6 +560,7 @@ class PSF(ABC):
         allow_nonzero_base: bool = False,
         scale_limit: float = 1000.0,
         use_angular_params: bool = True,
+        compute_uncertainty: bool = True,
     ) -> None | tuple[float, float, dict[str, Any]]:
         """Find the (y, x) coordinates that best fit a 2-D PSF to an image.
 
@@ -593,6 +595,13 @@ class PSF(ABC):
                 in the positive direction.
             scale_limit: The maximum PSF scale allowed.
             use_angular_params: Use angles to optimize parameter values.
+            compute_uncertainty: If True (default), compute 1-sigma parameter
+                uncertainties via a finite-difference Jacobian after the fit. This
+                requires one additional forward-model evaluation per free parameter,
+                roughly doubling total cost for a typical 3-parameter fit. Set to
+                False in hot loops (e.g. batch characterization runs) when the
+                ``x_err``, ``y_err``, ``scale_err``, and ``base_err`` metadata
+                entries are not needed; they will be ``NaN`` when skipped.
 
         Returns:
             None if no fit found.
@@ -671,7 +680,8 @@ class PSF(ABC):
             self._logger.info(
                 'find_position: bkgnd_degree=%s bkgnd_ignore_center=%s '
                 'bkgnd_num_sigma=%s tolerance=%s num_sigma=%s max_bad_frac=%s '
-                'allow_nonzero_base=%s scale_limit=%s use_angular_params=%s',
+                'allow_nonzero_base=%s scale_limit=%s use_angular_params=%s '
+                'compute_uncertainty=%s',
                 bkgnd_degree,
                 bkgnd_ignore_center,
                 bkgnd_num_sigma,
@@ -681,6 +691,7 @@ class PSF(ABC):
                 allow_nonzero_base,
                 scale_limit,
                 use_angular_params,
+                compute_uncertainty,
             )
 
         # Too close to the edge means we can't search
@@ -732,6 +743,7 @@ class PSF(ABC):
                 tolerance,
                 allow_nonzero_base,
                 use_angular_params,
+                compute_uncertainty,
             )
             if ret is None:
                 if self.detailed_logging:
@@ -753,7 +765,7 @@ class PSF(ABC):
             if num_sigma is not None:
                 sub_img[np.where(resid > num_sigma * resid_std)] = ma.masked
 
-            new_num_bad_pixels = ma.count_masked(sub_img)  # type: ignore
+            new_num_bad_pixels = cast(int, ma.count_masked(sub_img))  # type: ignore[no-untyped-call]
             if new_num_bad_pixels == num_bad_pixels:
                 break
             if new_num_bad_pixels == sub_img.size:
@@ -892,6 +904,7 @@ class PSF(ABC):
         tolerance: float,
         allow_nonzero_base: bool,
         use_angular_params: bool,
+        compute_uncertainty: bool,
     ) -> None | tuple[float, float, dict[str, Any]]:
         """Fit PSF position and shape on a fixed subimage via bounded Powell optimization.
 
@@ -932,6 +945,10 @@ class PSF(ABC):
                 additional parameters via angles in ``[0, pi]`` so box constraints map to
                 physical ranges. If ``False``, use direct bounded parameters (offsets
                 within ``search_limit``, etc.).
+            compute_uncertainty: If ``True``, compute 1-sigma uncertainties via a
+                finite-difference Jacobian (one extra forward-model call per free
+                parameter). If ``False``, all ``*_err`` entries in ``details`` are
+                ``NaN`` and the Jacobian is skipped.
 
         Returns:
             ``None`` if the background fit fails (:meth:`background_gradient_fit` returns
@@ -1105,104 +1122,106 @@ class PSF(ABC):
         # Residuals between the background-subtracted data and the fitted model,
         # restricted to unmasked pixels, are the basis for all quality metrics and
         # uncertainty estimates.
-        _diff = sub_img_grad - psf
-        if isinstance(_diff, ma.MaskedArray):
-            _resid_flat = ma.compressed(_diff).astype(np.float64)
+        diff = sub_img_grad - psf
+        if isinstance(diff, ma.MaskedArray):
+            resid_flat = ma.compressed(diff).astype(np.float64)
         else:
-            _resid_flat = _diff.flatten().astype(np.float64)
+            resid_flat = diff.flatten().astype(np.float64)
 
-        _n_valid = int(_resid_flat.size)
-        _n_params_fit = 3 + int(allow_nonzero_base) + len(self._additional_params)
-        _rss = float(np.dot(_resid_flat, _resid_flat))
-        if _n_valid <= _n_params_fit:
+        n_valid = int(resid_flat.size)
+        n_params_fit = 3 + int(allow_nonzero_base) + len(self._additional_params)
+        rss = float(np.dot(resid_flat, resid_flat))
+        if n_valid <= n_params_fit:
             self._logger.warning(
                 'find_position: underconstrained fit (%d valid pixels, %d fitted parameters);'
                 ' reduced_chi2 set to NaN',
-                _n_valid,
-                _n_params_fit,
+                n_valid,
+                n_params_fit,
             )
-            _reduced_chi2 = float('nan')
+            reduced_chi2 = float('nan')
         else:
-            _dof = _n_valid - _n_params_fit
-            _reduced_chi2 = _rss / _dof
-        _noise_rms = float(np.sqrt(_rss / _n_valid)) if _n_valid > 0 else 0.0
-        _peak_snr = float(scale / _noise_rms) if _noise_rms > 0.0 else 0.0
+            dof = n_valid - n_params_fit
+            reduced_chi2 = rss / dof
+        noise_rms = float(np.sqrt(rss / n_valid)) if n_valid > 0 else 0.0
+        peak_snr = float(scale / noise_rms) if noise_rms > 0.0 else 0.0
 
-        details['residual_rss'] = _rss
-        details['reduced_chi2'] = _reduced_chi2
-        details['noise_rms'] = _noise_rms
-        details['peak_snr'] = _peak_snr
+        details['residual_rss'] = rss
+        details['reduced_chi2'] = reduced_chi2
+        details['noise_rms'] = noise_rms
+        details['peak_snr'] = peak_snr
 
         # --- Parameter uncertainties via finite-difference Jacobian ---
         # Physical parameter vector in canonical order:
         #   [offset_y, offset_x, scale, (base if allow_nonzero_base), *additional...]
-        _phys: list[float] = [float(offset_y), float(offset_x), float(scale)]
+        phys: list[float] = [float(offset_y), float(offset_x), float(scale)]
         if allow_nonzero_base:
-            _phys.append(float(base))
-        for _ap in self._additional_params:
-            _phys.append(float(addl_vals_dict[_ap[2]]))
+            phys.append(float(base))
+        for ap in self._additional_params:
+            phys.append(float(addl_vals_dict[ap[2]]))
 
-        _n_phys = len(_phys)
+        n_phys = len(phys)
 
-        # Build the residual vector at an arbitrary physical-parameter point, applying
-        # the same masking as the final fit so the Jacobian is consistent.
-        def _residuals_at_phys(phys: list[float]) -> npt.NDArray[np.float64]:
-            _oy = phys[0]
-            _ox = phys[1]
-            _sc = phys[2]
-            _bs = phys[3] if allow_nonzero_base else 0.0
-            _start = 4 if allow_nonzero_base else 3
-            _extra: dict[str, Any] = {
-                _ap2[2]: phys[_start + _i2] for _i2, _ap2 in enumerate(self._additional_params)
-            }
-            _model = self.eval_rect(
-                cast(tuple[int, int], sub_img_grad.shape),
-                (_oy, _ox),
-                scale=_sc,
-                base=_bs,
-                **_extra,
-            )
-            _d = sub_img_grad - _model
-            if isinstance(_d, ma.MaskedArray):
-                return ma.compressed(_d).astype(np.float64)
-            return _d.flatten().astype(np.float64)
-
-        # Forward-difference Jacobian of the residual vector in physical space.
-        if _n_valid == 0:
-            # No valid pixels: uncertainties are undefined.
-            _cov = np.full((_n_phys, _n_phys), np.nan)
-            _uncertainties = np.full(_n_phys, np.nan)
+        if not compute_uncertainty:
+            uncertainties = np.full(n_phys, np.nan)
         else:
-            _jac = np.zeros((_n_valid, _n_phys), dtype=np.float64)
-            for _col in range(_n_phys):
-                _val = _phys[_col]
-                _eps = max(abs(_val) * _JACO_REL_EPS, _JACO_ABS_EPS)
-                _phys_plus = list(_phys)
-                _phys_plus[_col] += _eps
-                _r_plus = _residuals_at_phys(_phys_plus)
-                _jac[:, _col] = (_r_plus - _resid_flat) / _eps
+            # Build the residual vector at an arbitrary physical-parameter point,
+            # applying the same masking as the final fit so the Jacobian is consistent.
+            def residuals_at_phys(params: list[float]) -> npt.NDArray[np.float64]:
+                oy = params[0]
+                ox = params[1]
+                sc = params[2]
+                bs = params[3] if allow_nonzero_base else 0.0
+                start = 4 if allow_nonzero_base else 3
+                extra: dict[str, Any] = {
+                    ap2[2]: params[start + i2] for i2, ap2 in enumerate(self._additional_params)
+                }
+                model = self.eval_rect(
+                    cast(tuple[int, int], sub_img_grad.shape),
+                    (oy, ox),
+                    scale=sc,
+                    base=bs,
+                    **extra,
+                )
+                d = sub_img_grad - model
+                if isinstance(d, ma.MaskedArray):
+                    return ma.compressed(d).astype(np.float64)
+                return d.flatten().astype(np.float64)
 
-            # Covariance = reduced_chi2 * (J^T J)^{-1}; use lstsq for robustness when
-            # J^T J is ill-conditioned (e.g. underconstrained fits).
-            _jtj = _jac.T @ _jac
-            _cov_raw, _, _, _ = np.linalg.lstsq(_jtj, np.eye(_n_phys), rcond=None)
-            _cov = _cov_raw * _reduced_chi2
+            # Forward-difference Jacobian of the residual vector in physical space.
+            if n_valid == 0:
+                # No valid pixels: uncertainties are undefined.
+                uncertainties = np.full(n_phys, np.nan)
+            else:
+                jac = np.zeros((n_valid, n_phys), dtype=np.float64)
+                for col in range(n_phys):
+                    val = phys[col]
+                    eps = max(abs(val) * _JACO_REL_EPS, _JACO_ABS_EPS)
+                    phys_plus = list(phys)
+                    phys_plus[col] += eps
+                    r_plus = residuals_at_phys(phys_plus)
+                    jac[:, col] = (r_plus - resid_flat) / eps
 
-            # Diagonal 1-sigma uncertainties; negative variances (numerical noise) are
-            # clamped to zero before taking the square root.
-            _uncertainties = np.sqrt(np.maximum(np.diag(_cov), 0.0))
+                # Covariance = reduced_chi2 * (J^T J)^{-1}; use lstsq for robustness
+                # when J^T J is ill-conditioned (e.g. underconstrained fits).
+                jtj = jac.T @ jac
+                cov_raw, _, _, _ = np.linalg.lstsq(jtj, np.eye(n_phys), rcond=None)
+                cov = cov_raw * reduced_chi2
 
-        details['y_err'] = float(_uncertainties[0])
-        details['x_err'] = float(_uncertainties[1])
-        details['scale_err'] = float(_uncertainties[2])
-        _u_start = 3
+                # Diagonal 1-sigma uncertainties; negative variances (numerical noise)
+                # are clamped to zero before taking the square root.
+                uncertainties = np.sqrt(np.maximum(np.diag(cov), 0.0))
+
+        details['y_err'] = float(uncertainties[0])
+        details['x_err'] = float(uncertainties[1])
+        details['scale_err'] = float(uncertainties[2])
+        u_start = 3
         if allow_nonzero_base:
-            details['base_err'] = float(_uncertainties[3])
-            _u_start = 4
+            details['base_err'] = float(uncertainties[3])
+            u_start = 4
         else:
             details['base_err'] = 0.0
-        for _i, _ap in enumerate(self._additional_params):
-            details[_ap[2] + '_err'] = float(_uncertainties[_u_start + _i])
+        for i, ap in enumerate(self._additional_params):
+            details[ap[2] + '_err'] = float(uncertainties[u_start + i])
 
         for key in addl_vals_dict:
             details[key] = addl_vals_dict[key]

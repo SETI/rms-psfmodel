@@ -98,7 +98,6 @@ characterize = [
 
 [project.scripts]
 psf_gui = "psf_gui.main:main"
-characterize_gauss_fit = "characterize_gauss_fit.main:main"
 
 # Tool configuration
 

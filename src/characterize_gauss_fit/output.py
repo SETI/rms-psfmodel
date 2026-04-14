@@ -239,7 +239,9 @@ def _aggregate_results(results: list[TrialResult]) -> dict[str, Any]:
         for r in converged
         if r.sigma_x_err is not None and math.isfinite(r.sigma_x_err)
     ]
-    angle_errs = [r.angle_err for r in converged if r.angle_err is not None]
+    angle_errs = [
+        r.angle_err for r in converged if r.angle_err is not None and math.isfinite(r.angle_err)
+    ]
     scale_errs = [r.scale_err for r in converged if math.isfinite(r.scale_err)]
 
     return {

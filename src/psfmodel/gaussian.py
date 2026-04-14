@@ -11,7 +11,7 @@ and rendering. The module exposes helpers such as :class:`GaussianPSF` and the c
 """
 
 import logging
-from typing import cast
+from typing import Any, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -626,10 +626,9 @@ class GaussianPSF(PSF):
         )
         return ret
 
-    # Intentional override of :meth:`PSF._eval_rect`: ``rect_size`` / ``offset`` are
-    # narrowed to ``tuple``, Gaussian-specific keyword-only arguments are added, and the
-    # return type is ``np.floating``; call sites from the base class remain compatible.
-    def _eval_rect(  # type: ignore[override]
+    # Intentional override of :meth:`PSF._eval_rect`: Gaussian-specific keyword-only
+    # arguments are added while the parameter and return types match the base class.
+    def _eval_rect(
         self,
         rect_size: tuple[int, int],
         offset: tuple[float, float] = (0.5, 0.5),
@@ -640,7 +639,8 @@ class GaussianPSF(PSF):
         sigma_y: float | None = None,
         sigma_x: float | None = None,
         angle: float | None = None,
-    ) -> npt.NDArray[np.floating]:
+        **kwargs: Any,
+    ) -> npt.NDArray[np.float64]:
         """Pixel-integrated Gaussian on a rectangle (same grid as :meth:`eval_rect`).
 
         Parameters:
@@ -678,18 +678,18 @@ class GaussianPSF(PSF):
             sigma_x=sigma_x,
             angle=angle,
         )
-        rect = cast(npt.NDArray[np.floating], rect)
+        rect = cast(npt.NDArray[np.float64], rect)
         rect = rect.reshape(rect_size)
 
         return rect
 
     # Same rationale as :meth:`_eval_rect` above: extends :meth:`PSF.eval_rect` with
-    # Gaussian kwargs and concrete tuple types while delegating to
-    # :meth:`PSF._eval_rect_smeared`.
-    def eval_rect(  # type: ignore[override]
+    # Gaussian kwargs while accepting the same ``rect_size`` / ``offset`` types as the
+    # base and delegating to :meth:`PSF._eval_rect_smeared`.
+    def eval_rect(
         self,
-        rect_size: tuple[int, int],
-        offset: tuple[float, float] = (0.5, 0.5),
+        rect_size: list[int] | tuple[int, int],
+        offset: list[float] | tuple[float, float] = (0.5, 0.5),
         *,
         movement: tuple[float, float] | None = None,
         movement_granularity: float = 0.1,
@@ -699,7 +699,8 @@ class GaussianPSF(PSF):
         sigma_y: float | None = None,
         sigma_x: float | None = None,
         angle: float | None = None,
-    ) -> npt.NDArray[np.floating]:
+        **kwargs: Any,
+    ) -> npt.NDArray[np.float64]:
         """Create a rectangular pixelated Gaussian PSF.
 
         This is done by evaluating the PSF function from
@@ -745,8 +746,8 @@ class GaussianPSF(PSF):
             )
 
         return self._eval_rect_smeared(
-            rect_size,
-            offset=offset,
+            (rect_size_y, rect_size_x),
+            offset=(offset[0], offset[1]),
             movement=movement,
             movement_granularity=movement_granularity,
             scale=scale,

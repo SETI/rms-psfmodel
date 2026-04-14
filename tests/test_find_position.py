@@ -301,3 +301,115 @@ def test_find_position_uncertainty_decreases_with_snr() -> None:
     assert ret_high is not None
     assert ret_low[2]['x_err'] > ret_high[2]['x_err']
     assert ret_low[2]['y_err'] > ret_high[2]['y_err']
+
+
+# ---------------------------------------------------------------------------
+# compute_uncertainty flag tests
+# ---------------------------------------------------------------------------
+
+
+def test_find_position_compute_uncertainty_false_err_keys_are_nan(
+    default_psf: GaussianPSF,
+) -> None:
+    """With ``compute_uncertainty=False``, ``x_err``, ``y_err``, and ``scale_err`` are NaN."""
+
+    img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
+    ret = default_psf.find_position(
+        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0, compute_uncertainty=False
+    )
+    assert ret is not None
+    _, _, details = ret
+    assert np.isnan(details['x_err'])
+    assert np.isnan(details['y_err'])
+    assert np.isnan(details['scale_err'])
+
+
+def test_find_position_compute_uncertainty_false_position_and_metrics_unchanged(
+    default_psf: GaussianPSF,
+) -> None:
+    """Skipping uncertainty does not affect the fitted position or quality metrics."""
+
+    img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
+    ret_with = default_psf.find_position(
+        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0, compute_uncertainty=True
+    )
+    ret_without = default_psf.find_position(
+        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0, compute_uncertainty=False
+    )
+    assert ret_with is not None
+    assert ret_without is not None
+
+    y_with, x_with, d_with = ret_with
+    y_without, x_without, d_without = ret_without
+
+    assert y_without == pytest.approx(y_with)
+    assert x_without == pytest.approx(x_with)
+    for key in ('residual_rss', 'reduced_chi2', 'noise_rms', 'peak_snr'):
+        assert d_without[key] == pytest.approx(d_with[key])
+
+
+def test_find_position_compute_uncertainty_false_base_fixed_base_err_zero(
+    default_psf: GaussianPSF,
+) -> None:
+    """``base_err`` is 0.0 when base is not a free parameter, regardless of the flag."""
+
+    img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
+    ret = default_psf.find_position(
+        img,
+        img.shape,
+        (10, 10),
+        bkgnd_degree=None,
+        num_sigma=0,
+        allow_nonzero_base=False,
+        compute_uncertainty=False,
+    )
+    assert ret is not None
+    assert ret[2]['base_err'] == 0.0
+
+
+def test_find_position_compute_uncertainty_false_free_base_err_nan() -> None:
+    """``base_err`` is NaN when ``allow_nonzero_base=True`` and ``compute_uncertainty=False``."""
+
+    psf = GaussianPSF(sigma=(1.0, 1.0))
+    img = psf.eval_rect((21, 21), scale=2.0)
+    ret = psf.find_position(
+        img,
+        img.shape,
+        (10, 10),
+        bkgnd_degree=None,
+        num_sigma=0,
+        allow_nonzero_base=True,
+        compute_uncertainty=False,
+    )
+    assert ret is not None
+    assert np.isnan(ret[2]['base_err'])
+
+
+def test_find_position_compute_uncertainty_false_additional_param_errs_nan() -> None:
+    """``sigma_y_err`` and ``sigma_x_err`` are NaN when ``compute_uncertainty=False``."""
+
+    psf = GaussianPSF(
+        sigma=(None, None),
+        sigma_y_range=(0.5, 3.0),
+        sigma_x_range=(0.5, 3.0),
+    )
+    img = psf.eval_rect((21, 21), scale=2.0, sigma=(1.5, 1.5))
+    ret = psf.find_position(
+        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0, compute_uncertainty=False
+    )
+    assert ret is not None
+    _, _, details = ret
+    assert np.isnan(details['sigma_y_err'])
+    assert np.isnan(details['sigma_x_err'])
+
+
+def test_find_position_compute_uncertainty_default_is_true(default_psf: GaussianPSF) -> None:
+    """The default (no ``compute_uncertainty`` kwarg) produces finite ``x_err`` and ``y_err``."""
+
+    img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
+    ret = default_psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0)
+    assert ret is not None
+    _, _, details = ret
+    assert np.isfinite(details['x_err'])
+    assert np.isfinite(details['y_err'])
+    assert np.isfinite(details['scale_err'])

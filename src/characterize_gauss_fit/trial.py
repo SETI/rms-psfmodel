@@ -322,6 +322,9 @@ def run_trial(spec: TrialSpec) -> TrialResult:
         'max_bad_frac': spec.max_bad_frac,
         'allow_nonzero_base': spec.allow_nonzero_base,
         'use_angular_params': spec.use_angular_params,
+        # Uncertainty estimates (y_err, x_err, …) are not used by TrialResult;
+        # skipping the Jacobian roughly halves cost in batch runs.
+        'compute_uncertainty': False,
         'tolerance': spec.tolerance,
         'search_limit': spec.search_limit,
         'scale_limit': spec.scale_limit,

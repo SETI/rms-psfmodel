@@ -53,26 +53,8 @@ def _build_conditions(
     if study.include_noiseless:
         conditions.append((0.0, _NOISELESS_LABEL))
     for snr_val in study.snr_values:
-        conditions.append((_snr_to_noise_rms(snr_val, scale), f'snr_{snr_val:.0f}'))
+        conditions.append((utils.snr_to_noise_rms(snr_val, scale), f'snr_{snr_val:.0f}'))
     return conditions
-
-
-def _snr_to_noise_rms(snr: float, scale: float) -> float:
-    """Convert SNR (peak / noise_rms) to noise_rms.
-
-    Parameters:
-        snr: Signal-to-noise ratio (PSF peak / noise std). Must be positive.
-        scale: PSF amplitude scale factor (determines peak value).
-
-    Returns:
-        Corresponding noise standard deviation.
-
-    Raises:
-        ValueError: If ``snr`` is not positive.
-    """
-    if snr <= 0:
-        raise ValueError(f'snr must be > 0, got {snr}')
-    return scale / snr
 
 
 def build_specs(cfg: Config) -> list[TrialSpec]:
@@ -242,13 +224,13 @@ def _write_outputs(
                 log_x=True,
                 log_y=True,
                 note=(
-                    f'PSF: sigma_y = sigma_x = sigma (see series label); angle = 0\u00b0 (fixed);'
+                    'PSF: sigma_y = sigma_x = sigma (see series label); angle = 0\u00b0 (fixed);'
                     f' box_size = {study.box_size} px; scale = {scale:.2g}\n'
-                    f'Offset: Y = 0 px (fixed); X = delta (x-axis only); all positional offset'
-                    f' is injected in the X direction\n'
+                    'Offset: Y = 0 px (fixed); X = delta (x-axis only); all positional offset'
+                    ' is injected in the X direction\n'
                     f'Noise: {noise_desc}\n'
-                    f'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
-                    f' no background subtraction'
+                    'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
+                    ' no background subtraction'
                 ),
             )
             save_figure(fig, study_dir, f'{_STUDY_NAME}_{fname_prefix}_{cond_label}.png')
@@ -271,14 +253,14 @@ def _write_outputs(
             xlabel='Injected X offset (delta, pixels)',
             ylabel='Sigma (pixels)',
             note=(
-                f'PSF: sigma_y = sigma_x = sigma (y-axis); angle = 0\u00b0 (fixed);'
+                'PSF: sigma_y = sigma_x = sigma (y-axis); angle = 0\u00b0 (fixed);'
                 f' box_size = {study.box_size} px; scale = {scale:.2g}\n'
-                f'Offset: Y = 0 px (fixed); X = delta (x-axis); all offset in X only\n'
+                'Offset: Y = 0 px (fixed); X = delta (x-axis); all offset in X only\n'
                 f'Noise: Gaussian, noise_rms = {noise_rms:.3g}'
                 f' (SNR = {scale / noise_rms:.0f}); {study.noise_samples} trials per cell\n'
-                f'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
-                f' no background subtraction\n'
-                f'Recovery = fraction of trials where Euclidean pos_err < delta / 2'
+                'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
+                ' no background subtraction\n'
+                'Recovery = fraction of trials where Euclidean pos_err < delta / 2'
             ),
         )
         save_figure(fig, study_dir, f'{_STUDY_NAME}_recovery_{cond_label}.png')

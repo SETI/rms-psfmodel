@@ -18,75 +18,82 @@ others fixed. Every study produces:
 - **`summary.json`** -- aggregate statistics per parameter group plus the
   exact configuration used, formatted for AI-assisted analysis.
 
-## Installation
+## Running from the Repository
 
-Install the extra dependencies required by this tool:
+`characterize_gauss_fit` is not an installed command-line entry point. It must
+be run directly from the repository. First clone the repository and install the
+extra dependencies:
 
 ```sh
-pip install rms-psfmodel[characterize]
+git clone https://github.com/SETI/rms-psfmodel.git
+cd rms-psfmodel
+pip install -e ".[characterize]"
 ```
 
-This adds `matplotlib` and `pyyaml` to your environment.
+This adds `matplotlib` and `pyyaml` to your environment. All commands below
+use `python -m characterize_gauss_fit` and must be run from the repository
+root (or any directory where the package is importable).
 
 ## Quick Start
 
 Run all studies with default settings:
 
 ```sh
-characterize_gauss_fit
+python -m characterize_gauss_fit
 ```
 
 Run a quick smoke test across all studies using the bundled reduced-grid
 configuration (completes in roughly 30--120 seconds):
 
 ```sh
-characterize_gauss_fit --config src/characterize_gauss_fit/test_config.yaml
+python -m characterize_gauss_fit --copy-test-config-to test_config.yaml
+python -m characterize_gauss_fit --config test_config.yaml
 ```
 
 Run a single study:
 
 ```sh
-characterize_gauss_fit --study box_vs_sigma
+python -m characterize_gauss_fit --study box_vs_sigma
 ```
 
 Run with a custom override file and parallel workers:
 
 ```sh
-characterize_gauss_fit --config my_config.yaml --num-workers 8
+python -m characterize_gauss_fit --config my_config.yaml --num-workers 8
 ```
 
 List all available study names:
 
 ```sh
-characterize_gauss_fit --list-studies
+python -m characterize_gauss_fit --list-studies
 ```
 
 Copy the built-in default configuration to a local file for editing:
 
 ```sh
-characterize_gauss_fit --copy-default-config-to my_config.yaml
+python -m characterize_gauss_fit --copy-default-config-to my_config.yaml
 ```
 
 Copy the built-in reduced-grid test configuration to a local file:
 
 ```sh
-characterize_gauss_fit --copy-test-config-to test_config.yaml
+python -m characterize_gauss_fit --copy-test-config-to test_config.yaml
 ```
 
 Copy the built-in high-resolution configuration to a local file:
 
 ```sh
-characterize_gauss_fit --copy-hires-config-to hires_config.yaml
+python -m characterize_gauss_fit --copy-hires-config-to hires_config.yaml
 ```
 
 ## CLI Reference
 
 ```text
-usage: characterize_gauss_fit [--config FILE] [--study NAME] [--output-dir DIR]
-                               [--num-workers N] [--list-studies]
-                               [--copy-default-config-to FILE]
-                               [--copy-test-config-to FILE]
-                               [--copy-hires-config-to FILE] [--verbose]
+usage: python -m characterize_gauss_fit [--config FILE] [--study NAME] [--output-dir DIR]
+                                        [--num-workers N] [--list-studies]
+                                        [--copy-default-config-to FILE]
+                                        [--copy-test-config-to FILE]
+                                        [--copy-hires-config-to FILE] [--verbose]
 
 Options:
   --config FILE               Path to a YAML override file merged onto
@@ -95,8 +102,9 @@ Options:
                               enabled studies. Use --list-studies to see names.
   --output-dir DIR            Override the output directory from the config
                               file.
-  --num-workers N             Number of parallel worker processes. 1 (default)
-                              runs sequentially in the main process. >1 uses
+  --num-workers N             Number of parallel worker processes. Default:
+                              resolved from config file (built-in default: 1).
+                              1 = sequential in the main process; >1 uses
                               concurrent.futures.ProcessPoolExecutor.
   --list-studies              Print available study names and exit.
   --copy-default-config-to FILE
@@ -172,7 +180,7 @@ Study 1: How box size relative to PSF sigma affects fitting accuracy.
 | `enabled` | bool | `true` | Enable/disable this study. |
 | `box_sizes` | list[int] | `[5,7,9,11,13,17,21,25,31]` | Odd box sizes to test. Each must be >= 5. |
 | `sigmas` | list[float] | `[0.3,0.5,0.8,1.0,1.5,2.0,3.0,5.0]` | Symmetric PSF sigma values (pixels). |
-| `offset` | [float, float] | `[0.25, 0.25]` | Sub-pixel offset [y, x] applied to the PSF centre. |
+| `offsets` | list[[float, float]] | `[[0.0,0.0],[0.25,0.25],[0.5,0.0],[0.0,0.5],[0.5,0.5]]` | List of sub-pixel [y, x] offsets. Each entry produces a separate set of heatmap plots. |
 | `angle` | float | `0.0` | PSF rotation angle (radians). |
 | `scale` | float | `1.0` | PSF amplitude scale factor (overrides `generation.scale`). |
 | `fitting` | dict | `{bkgnd_degree: null}` | Per-study fitting overrides. |
@@ -258,7 +266,7 @@ Study 6: How injected background and fitting model choice interact.
 | `background_types` | list[str] | `[none,constant,linear,quadratic,noisy_constant]` | Background types to inject. |
 | `box_size` | int | `21` | Fixed box size. |
 | `sigma` | [float, float] | `[1.0, 1.0]` | Fixed PSF sigma [y, x]. |
-| `offset` | [float, float] | `[0.25, 0.25]` | Fixed sub-pixel offset. |
+| `offsets` | list[[float, float]] | `[[0.0,0.0],[0.25,0.25],[0.5,0.5]]` | List of sub-pixel [y, x] offsets. Each entry produces a separate set of heatmap plots. |
 
 Valid `background_types` values:
 
@@ -295,7 +303,7 @@ Study 8: Effectiveness of `num_sigma` bad-pixel rejection.
 |-----|------|---------|-------------|
 | `enabled` | bool | `true` | Enable/disable this study. |
 | `num_hot_pixels` | list[int] | `[0,1,3,5,10]` | Number of hot pixels to inject. |
-| `num_sigma_values` | list[float] | `[2.0, 3.0, 5.0]` | `num_sigma` rejection thresholds to test. |
+| `num_sigma_values` | list[float] | `[3.0, 4.0, 5.0, 6.0]` | `num_sigma` rejection thresholds to test. |
 | `num_sigma_with_null` | bool | `true` | Also test `num_sigma=null` (rejection disabled). |
 | `hot_amplitudes` | list[float] | `[5.0, 20.0, 100.0]` | Hot pixel amplitude as multiple of PSF peak. |
 | `noise_samples` | int | `20` | Noise realisations per combination (hot pixel positions randomised). |
@@ -575,7 +583,7 @@ defaults that provide a thorough survey of each study's parameter space.
 Output is written to `./gauss_fit_results/`.
 
 ```sh
-characterize_gauss_fit --copy-default-config-to my_config.yaml
+python -m characterize_gauss_fit --copy-default-config-to my_config.yaml
 ```
 
 ### Reduced-grid test configuration (`test_config.yaml`)
@@ -585,22 +593,22 @@ entire suite completes in roughly 30--120 seconds on a single core. Use it
 to verify that all code paths execute after code changes.
 
 ```sh
-characterize_gauss_fit --copy-test-config-to test_config.yaml
-characterize_gauss_fit --config test_config.yaml
+python -m characterize_gauss_fit --copy-test-config-to test_config.yaml
+python -m characterize_gauss_fit --config test_config.yaml
 ```
 
 Output is written to `./gauss_fit_test/` by default.
 
 | Study | Grid size | Approx. trials |
 |-------|-----------|----------------|
-| `box_vs_sigma` | 2 box sizes x 3 sigmas | 6 |
+| `box_vs_sigma` | 2 box sizes x 3 sigmas x 2 offsets | 12 |
 | `subpixel_offset` | 3 x 3 offset grid, 1 sigma | 9 |
-| `min_detectable_offset` | 3 deltas x 2 sigmas x 2 noise conditions x 3 samples | ~18 |
+| `min_detectable_offset` | 3 deltas x 2 sigmas x (1 noiseless + 1 SNR) x 3 samples | ~24 |
 | `sigma_asymmetry_angle` | 3 ratios x 3 angles x 1 sigma_x | 9 |
-| `constraint_modes` | 5 modes x 2 PSF shapes | ~18 |
-| `background` | 2 background types x 2 fitting degrees | 4 |
+| `constraint_modes` | 5 modes x 2 PSF shapes x 2 sigma-error fractions | ~20 |
+| `background` | 2 background types x 2 fitting degrees x 2 offsets | 8 |
 | `noise_sensitivity` | 4 SNR points x 1 sigma x 3 samples | 12 |
-| `hot_pixel_rejection` | 2 num_hot x 1 threshold x 1 amplitude x 3 samples | 12 |
+| `hot_pixel_rejection` | 2 num_hot x 2 num_sigma x 1 amplitude x 3 samples | 12 |
 
 ### High-resolution configuration (`hires_config.yaml`)
 
@@ -612,8 +620,8 @@ is 10--30x longer than the default configuration; use `--num-workers` to
 parallelise across CPU cores.
 
 ```sh
-characterize_gauss_fit --copy-hires-config-to hires_config.yaml
-characterize_gauss_fit --config hires_config.yaml --num-workers 8
+python -m characterize_gauss_fit --copy-hires-config-to hires_config.yaml
+python -m characterize_gauss_fit --config hires_config.yaml --num-workers 8
 ```
 
 Output is written to `./gauss_fit_hires/` by default.
@@ -635,9 +643,9 @@ All three copy commands write the file and exit immediately — no studies are
 run. The destination path must not already exist.
 
 ```sh
-characterize_gauss_fit --copy-default-config-to my_config.yaml
-characterize_gauss_fit --copy-test-config-to test_config.yaml
-characterize_gauss_fit --copy-hires-config-to hires_config.yaml
+python -m characterize_gauss_fit --copy-default-config-to my_config.yaml
+python -m characterize_gauss_fit --copy-test-config-to test_config.yaml
+python -m characterize_gauss_fit --copy-hires-config-to hires_config.yaml
 ```
 
 All parameters in any bundled config can be further overridden by combining
@@ -645,7 +653,7 @@ it with a second user config file or with CLI flags. For example, to run
 only study 1 with the test grid:
 
 ```sh
-characterize_gauss_fit --config test_config.yaml --study box_vs_sigma
+python -m characterize_gauss_fit --config test_config.yaml --study box_vs_sigma
 ```
 
 ---
@@ -686,5 +694,5 @@ studies:
 Run with:
 
 ```sh
-characterize_gauss_fit --config my_overrides.yaml
+python -m characterize_gauss_fit --config my_overrides.yaml
 ```

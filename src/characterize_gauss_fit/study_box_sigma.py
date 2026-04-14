@@ -158,10 +158,10 @@ def _write_outputs(
             f'PSF: sigma_y = sigma_x = sigma (x-axis); angle = {study.angle:.0f}\u00b0 (fixed,'
             f' axis-aligned); scale = {study.scale:.2g}; one noiseless trial per cell\n'
             f'Offset: Y = {offset_y:+.2f}, X = {offset_x:+.2f} px from pixel centre'
-            f' (fixed; one heatmap produced per offset pair)\n'
-            f'Background / noise: none injected; image is clean Gaussian pixel integrals only\n'
-            f'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
-            f' no background subtraction'
+            ' (fixed; one heatmap produced per offset pair)\n'
+            'Background / noise: none injected; image is clean Gaussian pixel integrals only\n'
+            'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
+            ' no background subtraction'
         )
         for data, metric_title, metric_key in [
             (pos_err_grid, 'Position error (Euclidean)', 'pos_err'),
@@ -187,29 +187,7 @@ def _write_outputs(
 
     # CSV and JSON (all offsets together)
     write_csv(cfg.output_dir, _STUDY_NAME, specs, results)
-    groups = build_json_groups(specs, results)
-    write_json_summary(
-        cfg.output_dir,
-        _STUDY_NAME,
-        specs,
-        results,
-        groups=groups,
-        config_used=config_to_dict(cfg),
-    )
-    _LOG.info('Study %s outputs written to %s', _STUDY_NAME, study_dir)
-
-
-def build_json_groups(specs: list[TrialSpec], results: list[TrialResult]) -> list[dict[str, Any]]:
-    """Build JSON summary groups for Study 1, keyed by (offset_y, offset_x, box_size, sigma_y).
-
-    Parameters:
-        specs: Trial specifications.
-        results: Trial results.
-
-    Returns:
-        List of group dicts for :func:`~output.write_json_summary`.
-    """
-    return utils.build_groups_by_keys(
+    groups: list[dict[str, Any]] = utils.build_groups_by_keys(
         specs,
         results,
         [
@@ -219,3 +197,12 @@ def build_json_groups(specs: list[TrialSpec], results: list[TrialResult]) -> lis
             ('sigma', lambda s: s.sigma_y),
         ],
     )
+    write_json_summary(
+        cfg.output_dir,
+        _STUDY_NAME,
+        specs,
+        results,
+        groups=groups,
+        config_used=config_to_dict(cfg),
+    )
+    _LOG.info('Study %s outputs written to %s', _STUDY_NAME, study_dir)

@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 import pathlib
 from collections.abc import Callable
-from typing import Any
 
 import numpy as np
 import numpy.typing as npt
@@ -159,13 +158,13 @@ def _write_outputs(
                     f'PSF: sigma_y = sigma_x = {sigma:.2g} px (fixed for this heatmap);'
                     f' angle = {study.angle:.0f}\u00b0 (fixed); box_size = {study.box_size} px;'
                     f' scale = {scale:.2g}; one noiseless trial per cell\n'
-                    f'Offset: Y and X each swept over a'
+                    'Offset: Y and X each swept over a'
                     f' {study.offset_steps}\u00d7{study.offset_steps}'
                     f' grid from {study.offset_range[0]:.2f} to {study.offset_range[1]:.2f} px'
-                    f' (the two heatmap axes)\n'
-                    f'Background / noise: none injected\n'
-                    f'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
-                    f' no background subtraction'
+                    ' (the two heatmap axes)\n'
+                    'Background / noise: none injected\n'
+                    'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
+                    ' no background subtraction'
                 ),
             )
             save_figure(fig, study_dir, f'{_STUDY_NAME}_{fname}')
@@ -218,12 +217,12 @@ def _write_outputs(
             note=(
                 f'PSF: sigma_y = sigma_x = sigma (series label); angle = {study.angle:.0f}\u00b0'
                 f' (fixed); box_size = {study.box_size} px; scale = {scale:.2g};'
-                f' one noiseless trial per point\n'
+                ' one noiseless trial per point\n'
                 f'Offset: the fixed axis is held at its midpoint ({offsets[mid_idx]:.2f} px);'
-                f' the swept axis is the x-axis\n'
-                f'Background / noise: none injected\n'
-                f'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
-                f' no background subtraction'
+                ' the swept axis is the x-axis\n'
+                'Background / noise: none injected\n'
+                'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
+                ' no background subtraction'
             ),
         )
         save_figure(fig, study_dir, f'{_STUDY_NAME}_{fname_line}')
@@ -244,20 +243,3 @@ def _write_outputs(
         config_used=config_to_dict(cfg),
     )
     _LOG.info('Study %s outputs written to %s', _STUDY_NAME, study_dir)
-
-
-def build_json_groups(specs: list[TrialSpec], results: list[TrialResult]) -> list[dict[str, Any]]:
-    """Build JSON summary groups for Study 2.
-
-    Parameters:
-        specs: Trial specifications.
-        results: Trial results.
-
-    Returns:
-        List of group dicts for :func:`~output.write_json_summary`.
-    """
-    return utils.build_groups_by_keys(
-        specs,
-        results,
-        _GROUP_KEYS,
-    )

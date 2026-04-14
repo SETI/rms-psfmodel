@@ -182,15 +182,15 @@ def _write_outputs(
                 note=(
                     f'PSF: sigma_x = {sigma_x:.2g} px (this panel); sigma_y = ratio \u00d7 sigma_x'
                     f' (y-axis); angle rotates 0\u2013180\u00b0 (x-axis); scale = {scale:.2g};'
-                    f' one noiseless trial per cell\n'
+                    ' one noiseless trial per cell\n'
                     f'Offset: Y = {study.offset[0]:+.2f}, X = {study.offset[1]:+.2f} px'
-                    f' from pixel centre (fixed for all cells)\n'
-                    f'Background / noise: none injected\n'
-                    f'Fitting: sigma_y, sigma_x, and angle ALL float freely;'
-                    f' no background subtraction\n'
-                    f'Angle error is reduced mod 90\u00b0: (sigma_y,sigma_x,\u03b8) \u2261'
-                    f' (sigma_x,sigma_y,\u03b8+90\u00b0) so raw error \u2248 90\u00b0 means'
-                    f' a perfect fit in the swapped-sigma form'
+                    ' from pixel centre (fixed for all cells)\n'
+                    'Background / noise: none injected\n'
+                    'Fitting: sigma_y, sigma_x, and angle ALL float freely;'
+                    ' no background subtraction\n'
+                    'Angle error is reduced mod 90\u00b0: (sigma_y,sigma_x,\u03b8) \u2261'
+                    ' (sigma_x,sigma_y,\u03b8+90\u00b0) so raw error \u2248 90\u00b0 means'
+                    ' a perfect fit in the swapped-sigma form'
                 ),
             )
             save_figure(fig, study_dir, f'{_STUDY_NAME}_{fname_prefix}_sx{sigma_x:.1f}.png')

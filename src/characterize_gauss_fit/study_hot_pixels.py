@@ -64,7 +64,7 @@ def build_specs(cfg: Config) -> list[TrialSpec]:
     """
     study = cfg.studies.hot_pixel_rejection
     scale = cfg.generation.scale
-    noise_rms = scale / study.snr
+    noise_rms = utils.snr_to_noise_rms(study.snr, scale)
 
     # Build num_sigma list including null if requested.
     num_sigma_list = _make_num_sigma_list(study.num_sigma_with_null, study.num_sigma_values)
@@ -174,7 +174,7 @@ def _write_outputs(
     """
     study = cfg.studies.hot_pixel_rejection
     scale = cfg.generation.scale
-    noise_rms_val = scale / study.snr
+    noise_rms_val = utils.snr_to_noise_rms(study.snr, scale)
 
     num_sigma_list = _make_num_sigma_list(study.num_sigma_with_null, study.num_sigma_values)
 
@@ -201,12 +201,12 @@ def _write_outputs(
             f'PSF: sigma_y = {study.sigma[0]:.1f}, sigma_x = {study.sigma[1]:.1f} px (fixed);'
             f' angle = 0\u00b0 (fixed); box_size = {study.box_size} px; scale = {scale:.2g}\n'
             f'Offset: Y = {study.offset[0]:+.2f}, X = {study.offset[1]:+.2f} px from pixel'
-            f' centre (fixed for all trials)\n'
+            ' centre (fixed for all trials)\n'
             f'Noise: Gaussian, noise_rms = {noise_rms_val:.3g} (SNR = {study.snr:.0f});'
             f' {study.noise_samples} independent trials per condition;'
-            f' hot-pixel positions randomized per trial\n'
-            f'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
-            f' num_sigma rejection = series label (see legend);'
+            ' hot-pixel positions randomized per trial\n'
+            'Fitting: sigma_y and sigma_x float freely; angle fixed at 0\u00b0;'
+            ' num_sigma rejection = series label (see legend);'
             f' hot-pixel amplitude = {hot_amp:.0f}\u00d7 PSF peak (see title)'
         )
         # --- Convergence-rate plot -------------------------------------------
