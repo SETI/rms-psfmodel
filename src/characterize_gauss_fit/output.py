@@ -29,6 +29,7 @@ from characterize_gauss_fit.trial import TrialResult, TrialSpec
 _CSV_COLUMNS: list[str] = [
     # Study-level context
     'study',
+    'rng_seed',
     # Input: geometry
     'box_size',
     'sigma_y_true',
@@ -37,6 +38,7 @@ _CSV_COLUMNS: list[str] = [
     'offset_y_true',
     'offset_x_true',
     'scale_true',
+    'base',
     # Input: fitter construction
     'fit_sigma_y',
     'fit_sigma_x',
@@ -51,8 +53,16 @@ _CSV_COLUMNS: list[str] = [
     # Input: fitting kwargs
     'bkgnd_degree',
     'num_sigma',
+    'bkgnd_num_sigma',
     'bkgnd_ignore_center_y',
     'bkgnd_ignore_center_x',
+    'max_bad_frac',
+    'allow_nonzero_base',
+    'use_angular_params',
+    'tolerance',
+    'search_limit_lo',
+    'search_limit_hi',
+    'scale_limit',
     # Outcome
     'converged',
     # Position errors
@@ -108,6 +118,7 @@ def _result_row(
     """
     row: dict[str, str] = dict.fromkeys(_CSV_COLUMNS, '')
     row['study'] = study
+    row['rng_seed'] = str(spec.rng_seed)
     row['box_size'] = str(spec.box_size)
     row['sigma_y_true'] = repr(spec.sigma_y)
     row['sigma_x_true'] = repr(spec.sigma_x)
@@ -115,6 +126,7 @@ def _result_row(
     row['offset_y_true'] = repr(spec.offset_y)
     row['offset_x_true'] = repr(spec.offset_x)
     row['scale_true'] = repr(spec.scale)
+    row['base'] = repr(spec.base)
     row['fit_sigma_y'] = _float_cell(spec.fit_sigma_y)
     row['fit_sigma_x'] = _float_cell(spec.fit_sigma_x)
     row['fit_angle'] = _float_cell(spec.fit_angle)
@@ -125,8 +137,16 @@ def _result_row(
     row['hot_pixel_amplitude'] = repr(spec.hot_pixel_amplitude)
     row['bkgnd_degree'] = '' if spec.bkgnd_degree is None else str(spec.bkgnd_degree)
     row['num_sigma'] = _float_cell(spec.num_sigma)
+    row['bkgnd_num_sigma'] = _float_cell(spec.bkgnd_num_sigma)
     row['bkgnd_ignore_center_y'] = str(spec.bkgnd_ignore_center[0])
     row['bkgnd_ignore_center_x'] = str(spec.bkgnd_ignore_center[1])
+    row['max_bad_frac'] = repr(spec.max_bad_frac)
+    row['allow_nonzero_base'] = 'true' if spec.allow_nonzero_base else 'false'
+    row['use_angular_params'] = 'true' if spec.use_angular_params else 'false'
+    row['tolerance'] = repr(spec.tolerance)
+    row['search_limit_lo'] = repr(spec.search_limit[0])
+    row['search_limit_hi'] = repr(spec.search_limit[1])
+    row['scale_limit'] = repr(spec.scale_limit)
     row['converged'] = 'true' if result.converged else 'false'
     row['pos_err_y'] = _float_cell(result.pos_err_y)
     row['pos_err_x'] = _float_cell(result.pos_err_x)

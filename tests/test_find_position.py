@@ -22,10 +22,29 @@ def test_find_position_invalid_box_size_raises() -> None:
     img = np.zeros((21, 21))
     for box in ((4, 5), (5, 4), (-1, 5), (5, -1)):
         with pytest.raises(ValueError) as exc_info:
-            psf.find_position(img, box, (10, 10), bkgnd_degree=None, num_sigma=0)
+            psf.find_position(img, box, (10, 10), bkgnd_degree=None, num_sigma=None)
         assert str(exc_info.value) == (
             f'box_size must have odd positive shape in each dimension, got {box}'
         )
+
+
+def test_find_position_invalid_num_sigma_raises() -> None:
+    """``find_position`` raises for non-positive or non-numeric ``num_sigma``."""
+
+    psf = GaussianPSF()
+    img = np.zeros((21, 21))
+
+    with pytest.raises(ValueError) as exc_info:
+        psf.find_position(img, (5, 5), (10, 10), bkgnd_degree=None, num_sigma=0.0)
+    assert 'num_sigma must be > 0' in str(exc_info.value)
+
+    with pytest.raises(ValueError) as exc_info:
+        psf.find_position(img, (5, 5), (10, 10), bkgnd_degree=None, num_sigma=-1.0)
+    assert 'num_sigma must be > 0' in str(exc_info.value)
+
+    with pytest.raises(TypeError) as exc_info:
+        psf.find_position(img, (5, 5), (10, 10), bkgnd_degree=None, num_sigma='bad')  # type: ignore[arg-type]
+    assert 'num_sigma must be a number or None' in str(exc_info.value)
 
 
 def test_find_position_returns_none_when_starting_point_near_edge() -> None:
@@ -38,7 +57,7 @@ def test_find_position_returns_none_when_starting_point_near_edge() -> None:
         (7, 7),
         (0, 5),
         bkgnd_degree=None,
-        num_sigma=0,
+        num_sigma=None,
     )
     assert ret is None
 
@@ -65,7 +84,7 @@ def test_find_position_optimizer_failure_warns(
             gauss2d.shape,
             (gauss2d.shape[0] // 2, gauss2d.shape[1] // 2),
             bkgnd_degree=None,
-            num_sigma=0,
+            num_sigma=None,
         )
 
     assert ret is None
@@ -124,7 +143,7 @@ def test_find_position_detailed_logging_emits_info(caplog: pytest.LogCaptureFixt
             gauss2d.shape,
             (gauss2d.shape[0] // 2, gauss2d.shape[1] // 2),
             bkgnd_degree=None,
-            num_sigma=0,
+            num_sigma=None,
         )
     assert ret is not None
     messages = [r.message for r in caplog.records if r.levelno == logging.INFO]
@@ -159,7 +178,7 @@ def test_find_position_num_sigma_rejects_outlier_pixel(default_psf: GaussianPSF)
 
     gauss2d = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
     contaminated = gauss2d.copy()
-    contaminated[10, 10] += 200.0
+    contaminated[3, 3] += 200.0
     ret = default_psf.find_position(
         contaminated,
         contaminated.shape,
@@ -182,7 +201,7 @@ def test_find_position_quality_metrics_noise_free(default_psf: GaussianPSF) -> N
     """Quality metrics are near-zero for a noise-free Gaussian image."""
 
     img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
-    ret = default_psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0)
+    ret = default_psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=None)
     assert ret is not None
     _, _, details = ret
     assert details['residual_rss'] < 1e-10
@@ -198,7 +217,7 @@ def test_find_position_quality_metrics_noisy() -> None:
     rng = np.random.default_rng(42)
     noise_std = 0.05
     img = psf.eval_rect((21, 21), scale=1.0) + rng.normal(0, noise_std, (21, 21))
-    ret = psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0)
+    ret = psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=None)
     assert ret is not None
     _, _, details = ret
     assert details['reduced_chi2'] == pytest.approx(noise_std**2, rel=0.3)
@@ -210,7 +229,7 @@ def test_find_position_quality_metrics_keys_present(default_psf: GaussianPSF) ->
     """All four quality-metric keys are present in the returned details dict."""
 
     img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
-    ret = default_psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0)
+    ret = default_psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=None)
     assert ret is not None
     _, _, details = ret
     for key in ('residual_rss', 'reduced_chi2', 'noise_rms', 'peak_snr'):
@@ -227,7 +246,7 @@ def test_find_position_position_uncertainties_non_negative(default_psf: Gaussian
     """Position and scale uncertainties are non-negative for a clean Gaussian fit."""
 
     img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
-    ret = default_psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0)
+    ret = default_psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=None)
     assert ret is not None
     _, _, details = ret
     assert details['x_err'] >= 0.0
@@ -239,7 +258,7 @@ def test_find_position_position_uncertainties_small_noise_free(default_psf: Gaus
     """Position uncertainties are negligible for a noise-free image."""
 
     img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
-    ret = default_psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0)
+    ret = default_psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=None)
     assert ret is not None
     _, _, details = ret
     assert details['x_err'] < 1e-3
@@ -251,7 +270,7 @@ def test_find_position_base_err_zero_when_base_fixed(default_psf: GaussianPSF) -
 
     img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
     ret = default_psf.find_position(
-        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0, allow_nonzero_base=False
+        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=None, allow_nonzero_base=False
     )
     assert ret is not None
     assert ret[2]['base_err'] == 0.0
@@ -262,7 +281,7 @@ def test_find_position_base_err_non_negative_when_base_free(default_psf: Gaussia
 
     img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
     ret = default_psf.find_position(
-        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0, allow_nonzero_base=True
+        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=None, allow_nonzero_base=True
     )
     assert ret is not None
     assert ret[2]['base_err'] >= 0.0
@@ -277,7 +296,7 @@ def test_find_position_additional_param_err_keys_present() -> None:
         sigma_x_range=(0.5, 3.0),
     )
     img = psf.eval_rect((21, 21), scale=2.0, sigma=(1.5, 1.5))
-    ret = psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0)
+    ret = psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=None)
     assert ret is not None
     _, _, details = ret
     assert 'sigma_y_err' in details
@@ -295,8 +314,8 @@ def test_find_position_uncertainty_decreases_with_snr() -> None:
     img_low = psf.eval_rect((21, 21), scale=0.5) + noise
     img_high = psf.eval_rect((21, 21), scale=5.0) + noise
 
-    ret_low = psf.find_position(img_low, (21, 21), (10, 10), bkgnd_degree=None, num_sigma=0)
-    ret_high = psf.find_position(img_high, (21, 21), (10, 10), bkgnd_degree=None, num_sigma=0)
+    ret_low = psf.find_position(img_low, (21, 21), (10, 10), bkgnd_degree=None, num_sigma=None)
+    ret_high = psf.find_position(img_high, (21, 21), (10, 10), bkgnd_degree=None, num_sigma=None)
     assert ret_low is not None
     assert ret_high is not None
     assert ret_low[2]['x_err'] > ret_high[2]['x_err']
@@ -315,7 +334,7 @@ def test_find_position_compute_uncertainty_false_err_keys_are_nan(
 
     img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
     ret = default_psf.find_position(
-        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0, compute_uncertainty=False
+        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=None, compute_uncertainty=False
     )
     assert ret is not None
     _, _, details = ret
@@ -331,10 +350,10 @@ def test_find_position_compute_uncertainty_false_position_and_metrics_unchanged(
 
     img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
     ret_with = default_psf.find_position(
-        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0, compute_uncertainty=True
+        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=None, compute_uncertainty=True
     )
     ret_without = default_psf.find_position(
-        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0, compute_uncertainty=False
+        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=None, compute_uncertainty=False
     )
     assert ret_with is not None
     assert ret_without is not None
@@ -359,7 +378,7 @@ def test_find_position_compute_uncertainty_false_base_fixed_base_err_zero(
         img.shape,
         (10, 10),
         bkgnd_degree=None,
-        num_sigma=0,
+        num_sigma=None,
         allow_nonzero_base=False,
         compute_uncertainty=False,
     )
@@ -377,7 +396,7 @@ def test_find_position_compute_uncertainty_false_free_base_err_nan() -> None:
         img.shape,
         (10, 10),
         bkgnd_degree=None,
-        num_sigma=0,
+        num_sigma=None,
         allow_nonzero_base=True,
         compute_uncertainty=False,
     )
@@ -395,7 +414,7 @@ def test_find_position_compute_uncertainty_false_additional_param_errs_nan() -> 
     )
     img = psf.eval_rect((21, 21), scale=2.0, sigma=(1.5, 1.5))
     ret = psf.find_position(
-        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0, compute_uncertainty=False
+        img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=None, compute_uncertainty=False
     )
     assert ret is not None
     _, _, details = ret
@@ -407,7 +426,7 @@ def test_find_position_compute_uncertainty_default_is_true(default_psf: Gaussian
     """The default (no ``compute_uncertainty`` kwarg) produces finite ``x_err`` and ``y_err``."""
 
     img = default_psf.eval_rect((21, 21), scale=2.0, sigma=(1.0, 1.0))
-    ret = default_psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=0)
+    ret = default_psf.find_position(img, img.shape, (10, 10), bkgnd_degree=None, num_sigma=None)
     assert ret is not None
     _, _, details = ret
     assert np.isfinite(details['x_err'])

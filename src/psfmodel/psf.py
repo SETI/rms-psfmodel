@@ -609,10 +609,15 @@ class PSF(ABC):
             Otherwise returns pos_y, pos_x, metadata. Metadata is a dictionary
             containing::
 
-                'x'                    The offset in X. (Same as pos_x)
+                'x'                    Full-image X coordinate of fitted position
+                                       (same as pos_x).
                 'x_err'                1-sigma uncertainty in X (pixels).
-                'y'                    The offset in Y. (Same as pos_y)
+                'y'                    Full-image Y coordinate of fitted position
+                                       (same as pos_y).
                 'y_err'                1-sigma uncertainty in Y (pixels).
+                '_local_x'             Subimage-relative X offset (offset from the
+                                       center of the cropped subimage).
+                '_local_y'             Subimage-relative Y offset.
                 'scale'                The best fit PSF scale.
                 'scale_err'            1-sigma uncertainty in PSF scale.
                 'base'                 The best fit PSF base.
@@ -652,6 +657,14 @@ class PSF(ABC):
             raise ValueError(
                 f'box_size must have odd positive shape in each dimension, got {box_size}'
             )
+
+        if num_sigma is not None:
+            if not isinstance(num_sigma, (int, float)):
+                raise TypeError(
+                    f'num_sigma must be a number or None, got {type(num_sigma).__name__}'
+                )
+            if num_sigma <= 0:
+                raise ValueError(f'num_sigma must be > 0, got {num_sigma}')
 
         half_box_size_y = box_size[0] // 2
         half_box_size_x = box_size[1] // 2
@@ -721,7 +734,7 @@ class PSF(ABC):
         if not isinstance(search_limit, (list, tuple)):
             search_limit = (float(search_limit), float(search_limit))
 
-        if num_sigma:
+        if num_sigma is not None:
             if isinstance(sub_img, ma.MaskedArray):
                 # We're going to change the mask so make a copy first
                 sub_img = sub_img.copy()
@@ -752,10 +765,10 @@ class PSF(ABC):
 
             res_y, res_x, details = ret
 
-            if not num_sigma:
+            if num_sigma is None:
                 break
 
-            resid = np.sqrt((details['subimg-gradient'] - details['scaled_psf']) ** 2)
+            resid = details['subimg-gradient'] - details['scaled_psf']
             resid_std = np.std(resid)
 
             if self.detailed_logging:
@@ -763,7 +776,7 @@ class PSF(ABC):
                 self._logger.debug('find_position: resid_std=%s', resid_std)
 
             if num_sigma is not None:
-                sub_img[np.where(resid > num_sigma * resid_std)] = ma.masked
+                sub_img[np.where(np.abs(resid) > num_sigma * resid_std)] = ma.masked
 
             new_num_bad_pixels = cast(int, ma.count_masked(sub_img))  # type: ignore[no-untyped-call]
             if new_num_bad_pixels == num_bad_pixels:
@@ -778,10 +791,18 @@ class PSF(ABC):
                 return None  # Too many masked
             num_bad_pixels = new_num_bad_pixels
 
+        # Promote subimage-relative offsets to full-image coordinates so that
+        # details['x']/details['y'] match the returned pos_x/pos_y values, as
+        # documented.  Preserve the local offsets for any internal diagnostics.
+        details['_local_y'] = details['y']
+        details['_local_x'] = details['x']
+        details['y'] = res_y + starting_pix[0]
+        details['x'] = res_x + starting_pix[1]
+
         if self.detailed_logging:
-            msg = f'find_position returning Y {res_y + starting_pix[0]:.4f}'
+            msg = f'find_position returning Y {details["y"]:.4f}'
             msg += f' +/- {details["y_err"]:.4f}'
-            msg += f' X {res_x + starting_pix[1]:.4f}'
+            msg += f' X {details["x"]:.4f}'
             msg += f' +/- {details["x_err"]:.4f}'
             if details['scale'] is not None:
                 msg += f' Scale {details["scale"]:.4f} Base {details["base"]:.4f}'
@@ -789,7 +810,7 @@ class PSF(ABC):
                 msg += f' SY {details["sigma_y"]:.4f} SX {details["sigma_x"]:.4f}'
             self._logger.info(msg)
 
-        return res_y + starting_pix[0], res_x + starting_pix[1], details
+        return details['y'], details['x'], details
 
     def _fit_psf_func(
         self,
@@ -819,9 +840,11 @@ class PSF(ABC):
             scale_limit: Upper bound on PSF ``scale`` for :meth:`eval_rect`.
             allow_nonzero_base: If ``True``, ``params`` includes a fitted constant
                 ``base`` passed to :meth:`eval_rect`; if ``False``, ``base`` is zero.
-            use_angular_params: If ``True``, map bounded angles to offsets, scale, extras,
-                and optional ``base``; if ``False``, ``params`` are physical values within
-                bounds set by the caller.
+            use_angular_params: If ``True``, map bounded angles to offsets, scale, and
+                extra PSF parameters; ``base`` (when ``allow_nonzero_base`` is ``True``)
+                always uses direct physical bounds regardless of this flag, because its
+                physical range is unbounded and cannot be cosine-mapped. If ``False``,
+                all ``params`` are physical values within their respective bounds.
             additional_params: Zero or more ``(lo, hi, name)`` tuples giving bounds and
                 keyword names for subclass-specific :meth:`eval_rect` arguments.
 
@@ -860,6 +883,9 @@ class PSF(ABC):
         base = 0.0
         param_end = 3
         if allow_nonzero_base:
+            # Direct physical decode regardless of use_angular_params: base uses
+            # physical optimizer bounds in both modes (not [0, pi]), so params[3]
+            # is a physical baseline value and needs no cosine remapping.
             base = params[3]
             param_end = 4
 
@@ -1016,8 +1042,11 @@ class PSF(ABC):
             bounds = [(0.0, np.pi), (0.0, np.pi), (0.0, np.pi)]
             starting_guess = [np.pi / 2, np.pi / 2, np.pi / 2]
             if allow_nonzero_base:
-                bounds += [(0.0, np.pi)]
-                starting_guess += [np.pi / 2]
+                # base has no finite physical range, so it cannot be cosine-mapped
+                # like the other angular parameters.  Use direct physical bounds in
+                # both modes so params[3] always holds a physical base value.
+                bounds += [(_FIT_PSF_BASE_BOUND_MIN, _FIT_PSF_BASE_BOUND_MAX)]
+                starting_guess += [0.001]
             for _ in range(len(self._additional_params)):
                 bounds += [(0.0, np.pi)]
                 starting_guess += [np.pi / 2]
@@ -1086,6 +1115,9 @@ class PSF(ABC):
         base = 0.0
         result_end = 3
         if allow_nonzero_base:
+            # Direct physical decode regardless of use_angular_params: base uses
+            # physical bounds in both modes (see bounds setup above), so result[3]
+            # is already a physical baseline value, not an angular parameter.
             base = result[3]
             result_end = 4
 

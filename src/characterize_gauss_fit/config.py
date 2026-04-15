@@ -575,11 +575,40 @@ def _validate_config(cfg: Config) -> None:
         if ratio <= 0:
             raise ValueError(f'sigma_asymmetry_angle.sigma_ratios: must be positive, got {ratio}')
 
-    for shape in cfg.studies.constraint_modes.psf_shapes:
+    cm = cfg.studies.constraint_modes
+    if len(cm.psf_shapes) == 0:
+        raise ValueError('constraint_modes.psf_shapes must contain at least one entry')
+    for shape in cm.psf_shapes:
+        if shape.sigma[0] <= 0 or shape.sigma[1] <= 0:
+            raise ValueError(
+                f'constraint_modes.psf_shapes: sigma values must be positive, got {shape.sigma}'
+            )
         if not (0.0 <= shape.angle <= math.pi):
             raise ValueError(
                 f'constraint_modes.psf_shapes: angle must be in [0, pi], got {shape.angle}'
             )
+    cmf = cm.fitting
+    if not (0.0 <= cmf.max_bad_frac <= 1.0):
+        raise ValueError(
+            f'constraint_modes.fitting.max_bad_frac must be in [0, 1], got {cmf.max_bad_frac}'
+        )
+    if cmf.num_sigma is not None and cmf.num_sigma <= 0:
+        raise ValueError(
+            f'constraint_modes.fitting.num_sigma must be None or > 0, got {cmf.num_sigma}'
+        )
+    if cmf.bkgnd_num_sigma is not None and cmf.bkgnd_num_sigma <= 0:
+        raise ValueError(
+            'constraint_modes.fitting.bkgnd_num_sigma must be None or > 0, '
+            f'got {cmf.bkgnd_num_sigma}'
+        )
+    if cmf.search_limit[0] < 0 or cmf.search_limit[1] < 0:
+        raise ValueError(
+            f'constraint_modes.fitting.search_limit values must be >= 0, got {cmf.search_limit}'
+        )
+    if cmf.scale_limit < 0:
+        raise ValueError(
+            f'constraint_modes.fitting.scale_limit must be >= 0, got {cmf.scale_limit}'
+        )
 
     valid_bkgnd_types = {'none', 'constant', 'linear', 'quadratic', 'noisy_constant'}
     for bt in cfg.studies.background.background_types:

@@ -298,7 +298,9 @@ def plot_grouped_bars(
     ax.set_title(title)
     ax.legend(fontsize=8)
     if log_scale:
-        ax.set_yscale('log')
+        float_vals = values.astype(float)
+        if (np.isfinite(float_vals) & (float_vals > 0)).any():
+            ax.set_yscale('log')
     ax.grid(visible=True, axis='y', alpha=0.3)
 
     return fig

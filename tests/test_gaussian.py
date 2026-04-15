@@ -179,6 +179,46 @@ def test_gaussian_integral_1d() -> None:
     npt.assert_array_almost_equal(ret, np.array([[g_0_1, g_n1_1], [g_n1_1, g_0_1]]))
 
 
+def test_gaussian_integral_1d_reversed_limits() -> None:
+    """``gaussian_integral_1d`` negates the Gaussian part when limits are reversed."""
+
+    g_0_1 = integrate.quad(GaussianPSF.gaussian_1d, 0.0, 1.0)[0]
+    g_n1_1 = integrate.quad(GaussianPSF.gaussian_1d, -1.0, 1.0)[0]
+
+    # Scalar reversed limits: Gaussian part is negated.
+    assert GaussianPSF.gaussian_integral_1d(1.0, 0.0) == pytest.approx(-g_0_1)
+    assert GaussianPSF.gaussian_integral_1d(1.0, -1.0) == pytest.approx(-g_n1_1)
+
+    # mean shifts the window; reversed limits still negate the result.
+    assert GaussianPSF.gaussian_integral_1d(1.0, -1.0, mean=2.0) == pytest.approx(
+        -integrate.quad(GaussianPSF.gaussian_1d, 1.0, 3.0)[0]
+    )
+
+    # scale multiplies the Gaussian part; negation applies to the scaled integral.
+    assert GaussianPSF.gaussian_integral_1d(1.0, -1.0, scale=2.0) == pytest.approx(-g_n1_1 * 2)
+
+    # base is an additive offset and is NOT negated with the limits.
+    assert GaussianPSF.gaussian_integral_1d(1.0, 0.0, base=5.0) == pytest.approx(-g_0_1 + 5.0)
+    assert GaussianPSF.gaussian_integral_1d(1.0, 0.0, scale=2.0, base=5.0) == pytest.approx(
+        -g_0_1 * 2 + 5.0
+    )
+
+    # 1-D array: first element reversed, second forward.
+    npt.assert_array_almost_equal(
+        GaussianPSF.gaussian_integral_1d(np.array([1.0, 0.0]), np.array([0.0, 1.0])),
+        np.array([-g_0_1, g_0_1]),
+    )
+
+    # 2-D array: swapped and unswapped elements in the same call.
+    npt.assert_array_almost_equal(
+        GaussianPSF.gaussian_integral_1d(
+            np.array([[1.0, 0.0], [0.0, 1.0]]),
+            np.array([[0.0, 1.0], [1.0, 0.0]]),
+        ),
+        np.array([[-g_0_1, g_0_1], [g_0_1, -g_0_1]]),
+    )
+
+
 def test_gaussian_integral_1d_nonpositive_sigma_raises() -> None:
     """``gaussian_integral_1d`` requires a positive ``sigma``."""
 
@@ -412,7 +452,7 @@ def test_gaussian_find_position(
             starting_point=((gauss2d.shape[0] // 2, gauss2d.shape[1] // 2)),
             bkgnd_degree=bkgnd_degree,
             allow_nonzero_base=allow_nonzero_base,
-            num_sigma=0,
+            num_sigma=None,
             use_angular_params=use_angular_params,
         )
     )
@@ -431,7 +471,7 @@ def test_gaussian_find_position(
             bkgnd_degree=bkgnd_degree,
             bkgnd_ignore_center=(4, 4),
             allow_nonzero_base=allow_nonzero_base,
-            num_sigma=0,
+            num_sigma=None,
             use_angular_params=use_angular_params,
         )
     )
@@ -452,7 +492,7 @@ def test_gaussian_find_position(
             bkgnd_degree=bkgnd_degree,
             bkgnd_ignore_center=(4, 4),
             allow_nonzero_base=allow_nonzero_base,
-            num_sigma=0,
+            num_sigma=None,
             use_angular_params=use_angular_params,
         )
     )
@@ -470,7 +510,7 @@ def test_gaussian_find_position(
             bkgnd_degree=bkgnd_degree,
             bkgnd_ignore_center=(4, 4),
             allow_nonzero_base=allow_nonzero_base,
-            num_sigma=0,
+            num_sigma=None,
             use_angular_params=use_angular_params,
         )
     )
@@ -490,7 +530,7 @@ def test_gaussian_find_position(
             bkgnd_degree=bkgnd_degree,
             bkgnd_ignore_center=(4, 4),
             allow_nonzero_base=allow_nonzero_base,
-            num_sigma=0,
+            num_sigma=None,
             use_angular_params=use_angular_params,
         )
     )
@@ -509,7 +549,7 @@ def test_gaussian_find_position(
             starting_point=((gauss2d.shape[0] // 2, gauss2d.shape[1] // 2)),
             bkgnd_degree=bkgnd_degree,
             allow_nonzero_base=allow_nonzero_base,
-            num_sigma=0,
+            num_sigma=None,
             use_angular_params=use_angular_params,
         )
     )
@@ -532,7 +572,7 @@ def test_gaussian_find_position(
             starting_point=((gauss2d.shape[0] // 2, gauss2d.shape[1] // 2)),
             bkgnd_degree=bkgnd_degree,
             allow_nonzero_base=allow_nonzero_base,
-            num_sigma=0,
+            num_sigma=None,
             use_angular_params=use_angular_params,
         )
     )
@@ -552,7 +592,7 @@ def test_gaussian_find_position(
             starting_point=((gauss2d.shape[0] // 2, gauss2d.shape[1] // 2)),
             bkgnd_degree=bkgnd_degree,
             allow_nonzero_base=allow_nonzero_base,
-            num_sigma=0,
+            num_sigma=None,
             use_angular_params=use_angular_params,
         )
     )
@@ -576,7 +616,7 @@ def test_gaussian_find_position(
                 starting_point=((gauss2d.shape[0] // 2, gauss2d.shape[1] // 2)),
                 bkgnd_degree=bkgnd_degree,
                 allow_nonzero_base=allow_nonzero_base,
-                num_sigma=0,
+                num_sigma=None,
                 use_angular_params=use_angular_params,
             )
         )
