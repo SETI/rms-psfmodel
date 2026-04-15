@@ -1,0 +1,113 @@
+# test_config.yaml -- Reduced-grid configuration for rapid smoke-testing.
+#
+# Runs all eight studies but with the smallest viable parameter grids so
+# that the entire suite completes in roughly 30-120 seconds on a single
+# core.  Use this to verify that all code paths execute correctly after
+# code changes before committing.
+#
+# Run with:
+#   characterize_gauss_fit --config src/characterize_gauss_fit/test_config.yaml
+
+output_dir: ./gauss_fit_test
+num_workers: 1
+noise_samples: 3
+
+studies:
+
+  # Study 1: 2 box sizes x 3 sigmas x 2 offsets = 12 trials
+  box_vs_sigma:
+    enabled: true
+    box_sizes: [9, 21]
+    sigmas: [0.5, 1.0, 2.0]
+    offsets:
+      - [0.0, 0.0]
+      - [0.25, 0.25]
+    angle: 0.0
+    scale: 1.0
+    fitting:
+      bkgnd_degree: null
+
+  # Study 2: 3x3 offset grid x 1 sigma = 9 trials
+  subpixel_offset:
+    enabled: true
+    offset_steps: 3
+    offset_range: [0.0, 0.5]
+    sigmas: [1.0]
+    box_size: 13
+    angle: 0.0
+    fitting:
+      bkgnd_degree: null
+
+  # Study 3: 3 deltas x 2 sigmas x (1 noiseless + 1 snr) x 3 noise = 24 trials
+  min_detectable_offset:
+    enabled: true
+    delta_offsets: [0.01, 0.05, 0.2]
+    sigmas: [0.5, 1.5]
+    box_size: 13
+    noise_samples: 3
+    snr_values: [100.0]
+    include_noiseless: true
+    fitting:
+      bkgnd_degree: null
+
+  # Study 4: 3 ratios x 3 angles x 1 sigma_x = 9 trials
+  sigma_asymmetry_angle:
+    enabled: true
+    sigma_ratios: [0.5, 1.0, 2.0]
+    angle_steps: 3
+    sigma_x_values: [1.0]
+    box_size: 13
+    offset: [0.25, 0.25]
+    fitting:
+      bkgnd_degree: null
+
+  # Study 5: 5 modes x 2 shapes x 2 sigma_error_fractions = 20 trials (modes: all_float,
+  #          sigma_fixed_correct, angle_fixed_correct, all_fixed_correct, all_fixed_errors)
+  constraint_modes:
+    enabled: true
+    sigma_error_fractions: [0.0, 0.3]
+    angle_error_rad: 0.3
+    psf_shapes:
+      - sigma: [1.0, 1.0]
+        angle: 0.0
+      - sigma: [0.5, 1.5]
+        angle: 0.7854
+    box_size: 13
+    offset: [0.25, 0.25]
+    scale: 1.5
+
+  # Study 6: 2 background types x 2 fitting degrees x 1 amplitude x 1 ignore_center x 2 offsets = 8 trials
+  background:
+    enabled: true
+    background_amplitudes: [0.1]
+    bkgnd_degrees: [1]
+    bkgnd_degrees_with_null: true
+    bkgnd_ignore_centers: [[2, 2]]
+    background_types: [none, constant]
+    box_size: 13
+    sigma: [1.0, 1.0]
+    offsets:
+      - [0.0, 0.0]
+      - [0.25, 0.25]
+
+  # Study 7: 4 SNR points x 1 sigma x 3 noise samples = 12 trials
+  noise_sensitivity:
+    enabled: true
+    snr_log_range: [1.0, 3.0]
+    snr_steps: 4
+    sigmas: [1.0]
+    noise_samples: 3
+    box_size: 13
+
+  # Study 8: 2 num_hot x 2 num_sigma x 1 amplitude x 3 noise samples = 12 trials
+  hot_pixel_rejection:
+    enabled: true
+    num_hot_pixels: [0, 3]
+    num_sigma_values: [3.0, 5.0]
+    num_sigma_with_null: false
+    hot_amplitudes: [20.0]
+    noise_samples: 3
+    snr: 100.0
+    box_size: 13
+    sigma: [1.0, 1.0]
+    offset: [0.25, 0.25]

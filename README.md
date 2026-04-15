@@ -1,3 +1,7 @@
+# rms-psfmodel
+
+<!-- pyml disable MD025 -->
+
 [![GitHub release; latest by date](https://img.shields.io/github/v/release/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/releases)
 [![GitHub Release Date](https://img.shields.io/github/release-date/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/releases)
 [![Test Status](https://img.shields.io/github/actions/workflow/status/SETI/rms-psfmodel/run-tests.yml?branch=main)](https://github.com/SETI/rms-psfmodel/actions)
@@ -21,11 +25,15 @@
 ![GitHub License](https://img.shields.io/github/license/SETI/rms-psfmodel)
 [![Number of GitHub stars](https://img.shields.io/github/stars/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/stargazers)
 ![GitHub forks](https://img.shields.io/github/forks/SETI/rms-psfmodel)
+[![DOI](https://zenodo.org/badge/rms-psfmodel.svg)](https://zenodo.org/badge/latestdoi/rms-psfmodel)
+<!-- start-after-point -->
 
 # Introduction
 
-`psfmodel` is a set of classes for reading and searching star catalogs. Currently NAIF SPICE
-star catalogs, the Yale Bright Star Catalog (YBSC), and UCAC4 are supported.
+`psfmodel` provides abstract and concrete classes for modeling point spread functions (PSFs)
+and fitting them to image data. It includes an analytic 2-D Gaussian PSF with optional
+rotation, pixel integration, motion smearing, and background polynomial fitting, plus helpers
+for astrometric position estimation via bounded optimization.
 
 `psfmodel` is a product of the [PDS Ring-Moon Systems Node](https://pds-rings.seti.org).
 
@@ -40,6 +48,10 @@ pip install rms-psfmodel
 # Getting Started
 
 Details of each class are available in the [module documentation](https://rms-psfmodel.readthedocs.io/en/latest/module.html).
+
+After installation, an optional Tkinter-based PSF explorer is available as the `psf_gui` command (or `python -m psf_gui` with `src` on `PYTHONPATH`). A working Tcl/Tk installation is required (for example, install the `python3-tk` package on Debian/Ubuntu).
+
+A characterization tool that systematically measures Gaussian PSF fitting accuracy across a wide parameter space is available in the repository. Clone the repo, install with `pip install -e ".[characterize]"`, and run it with `python -m characterize_gauss_fit`.
 
 # Contributing
 

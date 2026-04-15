@@ -6,11 +6,10 @@ import os
 
 import astropy.io.fits as pyfits
 import numpy as np
-from scipy.interpolate import RectBivariateSpline
 import scipy.signal as scisig
+from scipy.interpolate import RectBivariateSpline
 
-from psfmodel import PSF
-
+from .psf import PSF
 
 #===============================================================================
 #
@@ -268,9 +267,17 @@ class HSTPSF(PSF):
             jitter_x/y/z      The amount of jitter (in mas) to apply to the
                               PSF; z is the angle; None means use the default
                               for the instrument/detector
+
+        Additional keyword arguments are passed to :class:`PSF`: ``logger`` and
+        ``detailed_logging`` (see :meth:`PSF.__init__`).
         """
 
-        PSF.__init__(self, movement, movement_granularity)
+        _logger = kwargs.pop('logger', None)
+        _detailed_logging = bool(kwargs.pop('detailed_logging', False))
+        PSF.__init__(self, logger=_logger, detailed_logging=_detailed_logging)
+
+        self.movement = movement if movement is not None else (0.0, 0.0)
+        self.movement_granularity = movement_granularity
 
         self.instrument = instrument
         self.detector = detector
@@ -298,7 +305,8 @@ class HSTPSF(PSF):
         if self.subsample is None:
             self.subsample = DEFAULT_SUBSAMPLE[(self.instrument,
                                                 self.detector)]
-        assert self.subsample % 2 == 1 # Must be odd
+        if self.subsample % 2 != 1:
+            raise ValueError(f'subsample must be odd, got {self.subsample}')
         if self.jitter_x is None:
             self.jitter_x = DEFAULT_JITTER[(self.instrument, self.detector)]
         if self.jitter_y is None:
@@ -319,19 +327,23 @@ class HSTPSF(PSF):
         elif instrument == 'WFC3':
             self._init_WFC3(**kwargs)
         else:
-            print('UNKNOWN INSTRUMENT', instrument)
-            assert False
+            raise ValueError(f'Unknown HST instrument: {instrument!r}')
 
     def _init_ACS(self, **kwargs):
-        assert self.detector == 'HRC'
+        if self.detector != 'HRC':
+            raise ValueError(f"ACS requires detector 'HRC', got {self.detector!r}")
         self.do_subsample_diffusion = True
 
     def _init_WFPC2(self, **kwargs):
-        assert self.detector == 'PC1'
+        if self.detector != 'PC1':
+            raise ValueError(f"WFPC2 requires detector 'PC1', got {self.detector!r}")
         self.do_subsample_diffusion = False
 
     def _init_WFC3(self, **kwargs):
-        assert self.detector == 'UVIS' or self.detector == 'IR'
+        if self.detector not in ('UVIS', 'IR'):
+            raise ValueError(
+                f"WFC3 requires detector 'UVIS' or 'IR', got {self.detector!r}"
+            )
         self.do_subsample_diffusion = True
 
         # See http://www.stsci.edu/hst/observatory/apertures/wfc3.html
@@ -366,12 +378,10 @@ class HSTPSF(PSF):
                 if self.sample is None:
                     self.sample = 256
             else:
-                print('UNKNOWN WFC3 UVIS APERTURE', self.aperture)
-                assert False
+                raise ValueError(f'Unknown WFC3 UVIS aperture: {self.aperture!r}')
         else:
             if self.aperture != 'IRSUB256':
-                print('UNKNOWN WFC3 IR APERTURE', self.aperture)
-                assert False
+                raise ValueError(f'Unknown WFC3 IR aperture: {self.aperture!r}')
             x_offset = 1014//2-256//2
             y_offset = 1014//2-256//2
             if self.line is None:
@@ -434,20 +444,29 @@ class HSTPSF(PSF):
         """
 
         if instrument == 'ACS':
-            assert detector == 'HRC'
+            if detector != 'HRC':
+                raise ValueError(f"ACS requires detector 'HRC', got {detector!r}")
         elif instrument == 'WFPC2':
-            assert detector == 'PC1'
+            if detector != 'PC1':
+                raise ValueError(f"WFPC2 requires detector 'PC1', got {detector!r}")
         elif instrument == 'WFC3':
-            assert detector == 'UVIS' or detector == 'IR'
+            if detector not in ('UVIS', 'IR'):
+                raise ValueError(
+                    f"WFC3 requires detector 'UVIS' or 'IR', got {detector!r}"
+                )
         else:
-            assert False
+            raise ValueError(f'Unknown HST instrument for TinyTim: {instrument!r}')
 
         min_fov = None
         for fov_size, pixel_size in RETURNED_SIZES[(instrument, detector)]:
             if pixel_size > psf_size_pixels:
                 min_fov = fov_size
                 break
-        assert min_fov is not None
+        if min_fov is None:
+            raise ValueError(
+                f'No TinyTim FOV supports psf_size_pixels={psf_size_pixels} for '
+                f'instrument={instrument!r}, detector={detector!r}'
+            )
 
         if min_fov*.7 > fov: # Give a little slack for the distortion
             print('WARNING: OVERRIDING SPECIFIED FOV', fov, end=' ')
@@ -471,7 +490,10 @@ class HSTPSF(PSF):
                               fov, subsample_amt))
         fits_filename = path_join(PSF_CACHE_DIR, fits_base)
         if not os.path.exists(fits_filename) or force_run_tinytim:
-            assert psf_size_pixels % 2 == 1 # Must be odd
+            if psf_size_pixels % 2 != 1:
+                raise ValueError(
+                    f'psf_size_pixels must be odd for TinyTim, got {psf_size_pixels}'
+                )
             orig_cwd = os.getcwd()
             os.chdir(TINY_TIM_DIR)
             psf_filename = 'temp_psf' + str(os.getpid()) + '_'
@@ -547,8 +569,9 @@ class HSTPSF(PSF):
                 os.unlink(full_psf_filename)
 
             if not os.path.exists(temp_fits_filename):
-                print('RUN_TINYTIM: ERROR CREATING FITS FILE', psf_filename)
-                assert False
+                raise RuntimeError(
+                    f'TinyTim did not create FITS file (expected {temp_fits_filename!r})'
+                )
 
             psf_file = pyfits.open(temp_fits_filename)
             psf_file.writeto(fits_filename, overwrite=True)
@@ -583,8 +606,9 @@ class HSTPSF(PSF):
         psf_halfsize = psf_size_pixels//2
         if (psf_halfsize > psf_size[0]//2 or
             psf_halfsize > psf_size[1]//2):
-            print('FATAL ERROR: TINYTIM returned a PSF smaller', psf_size, 'than we wanted', psf_halfsize)
-            assert False
+            raise RuntimeError(
+                f'TinyTim PSF shape {psf_size} is too small for half-size {psf_halfsize}'
+            )
         psf_data = psf_data[psf_size[1]//2-psf_halfsize:
                             psf_size[1]//2+psf_halfsize+1,
                             psf_size[0]//2-psf_halfsize:
@@ -613,8 +637,10 @@ class HSTPSF(PSF):
             self.cached_psf_size = psf.shape[0]
             self.cached_psf = psf
             self.cached_diffusion_matrix = diffusion_matrix
-            assert psf.shape[0] % 2 == 1 # Odd
-            assert psf.shape[1] % 2 == 1 # Odd
+            if psf.shape[0] % 2 != 1 or psf.shape[1] % 2 != 1:
+                raise RuntimeError(
+                    f'Cached TinyTim PSF must have odd side lengths, got shape {psf.shape}'
+                )
             self.psf_zero_offset = psf.shape[0]//2
             self.cached_pixelated_psf = None
 
@@ -717,7 +743,7 @@ class HSTPSF(PSF):
             base        a scalar added to the resulting PSF.
         """
 
-        assert False
+        raise NotImplementedError('HSTPSF.eval_point is not implemented')
 
     def eval_pixel(self, coord, offset=(0.,0.), scale=1., base=0., **kwargs):
         """Evaluate the PSF integrated over an entire integer pixel.
@@ -770,8 +796,10 @@ class HSTPSF(PSF):
 
         rect_size_y, rect_size_x = rect_size
 
-        assert rect_size_y % 2 == 1 # Odd
-        assert rect_size_x % 2 == 1 # Odd
+        if rect_size_y % 2 != 1 or rect_size_x % 2 != 1:
+            raise ValueError(
+                f'rect_size must have odd positive dimensions, got {(rect_size_y, rect_size_x)}'
+            )
 
         half_rect_size_y = rect_size_y // 2
         half_rect_size_x = rect_size_x // 2

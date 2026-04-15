@@ -1,0 +1,146 @@
+# hires_config.yaml -- High-resolution configuration for characterize_gauss_fit.
+#
+# Runs all eight studies with denser parameter grids and larger noise-sample
+# counts compared with the defaults, while staying within the same ranges.
+# The goal is smoother heatmaps, less noisy line plots, and more nuanced
+# detail at intermediate parameter values.
+#
+# Estimated runtime: ~10-30x longer than the default config.  Use
+# --num-workers to parallelise across CPU cores, e.g.:
+#
+#   characterize_gauss_fit --config hires_config.yaml --num-workers 8
+#
+# Run with:
+#   characterize_gauss_fit --config src/characterize_gauss_fit/hires_config.yaml
+
+output_dir: ./gauss_fit_hires
+num_workers: 1
+
+# Stochastic studies use 200 noise realisations per point (vs. 50 default).
+noise_samples: 200
+
+studies:
+
+  # Study 1: 12 box sizes x 13 sigmas x 5 offsets = 780 trials
+  # Adds intermediate box sizes (15, 19) and extra sigma values (0.4, 0.6,
+  # 0.7, 1.25, 2.5, 4.0) to fill in the heatmap grid more finely.
+  box_vs_sigma:
+    enabled: true
+    box_sizes: [5, 7, 9, 11, 13, 15, 17, 19, 21, 25, 31, 41]
+    sigmas: [0.3, 0.4, 0.5, 0.6, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]
+    offsets:
+      - [0.0, 0.0]
+      - [0.25, 0.25]
+      - [0.5, 0.0]
+      - [0.0, 0.5]
+      - [0.5, 0.5]
+    angle: 0.0
+    scale: 1.0
+    fitting:
+      bkgnd_degree: null
+
+  # Study 2: 21x21 offset grid x 4 sigmas = 1764 trials
+  # Doubles the offset-step resolution (0.025 px per step) and adds sigma=1.5
+  # to provide an intermediate panel between 1.0 and 2.0.
+  subpixel_offset:
+    enabled: true
+    offset_steps: 21
+    offset_range: [0.0, 0.5]
+    sigmas: [0.5, 1.0, 1.5, 2.0]
+    box_size: 21
+    angle: 0.0
+    fitting:
+      bkgnd_degree: null
+
+  # Study 3: 11 deltas x 7 sigmas x (1 noiseless + 4 snr x 200 samples) = ~62k trials
+  # Adds two extra log-spaced delta values and a low-SNR (20) condition to
+  # better characterise the detection floor.  Raise noise_samples for tighter
+  # uncertainty bands.
+  min_detectable_offset:
+    enabled: true
+    delta_offsets: [0.001, 0.002, 0.004, 0.007, 0.01, 0.02, 0.04, 0.07, 0.1, 0.2, 0.5]
+    sigmas: [0.3, 0.5, 0.8, 1.0, 1.5, 2.0, 3.0]
+    box_size: 21
+    noise_samples: 200
+    snr_values: [20.0, 50.0, 100.0, 500.0]
+    include_noiseless: true
+    fitting:
+      bkgnd_degree: null
+
+  # Study 4: 10 ratios x 25 angles x 3 sigma_x = 750 trials
+  # Adds extra asymmetry ratios (0.2, 0.33, 0.67, 3.0) and nearly doubles the
+  # angular resolution (7.5 deg per step vs. 15 deg in default).
+  sigma_asymmetry_angle:
+    enabled: true
+    sigma_ratios: [0.2, 0.33, 0.5, 0.67, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0]
+    angle_steps: 25
+    sigma_x_values: [0.5, 1.0, 2.0]
+    box_size: 25
+    offset: [0.25, 0.25]
+    fitting:
+      bkgnd_degree: null
+
+  # Study 5: 6 sigma-error fractions x 3+ shapes
+  # Adds intermediate sigma-error values (0.1, 0.3, 0.75) and two extra PSF
+  # shapes to reveal how the constraint accuracy curve behaves between modes.
+  constraint_modes:
+    enabled: true
+    sigma_error_fractions: [0.0, 0.1, 0.2, 0.3, 0.5, 0.75]
+    angle_error_rad: 0.3
+    psf_shapes:
+      - sigma: [1.0, 1.0]
+        angle: 0.0
+      - sigma: [0.5, 1.5]
+        angle: 0.7854   # pi/4
+      - sigma: [1.0, 2.0]
+        angle: 1.0472   # pi/3
+      - sigma: [0.7, 1.4]
+        angle: 0.5236   # pi/6
+    box_size: 21
+    offset: [0.25, 0.25]
+    scale: 1.5
+
+  # Study 6: 7 amplitudes x 5 degrees (incl. null) x 4 ignore_centers x 5 types x 3 offsets
+  # Adds more background amplitudes (0.005, 0.05, 0.25, 1.0), degree=3, and
+  # ignore_center=[3,3] for a finer view of the background-model landscape.
+  background:
+    enabled: true
+    background_amplitudes: [0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0]
+    bkgnd_degrees: [0, 1, 2, 3]
+    bkgnd_degrees_with_null: true
+    bkgnd_ignore_centers: [[1, 1], [2, 2], [3, 3], [4, 4]]
+    background_types: [none, constant, linear, quadratic, noisy_constant]
+    box_size: 21
+    sigma: [1.0, 1.0]
+    offsets:
+      - [0.0, 0.0]
+      - [0.25, 0.25]
+      - [0.5, 0.5]
+
+  # Study 7: 25 SNR points x 4 sigmas x 200 samples = 20000 trials
+  # Finer log-spaced SNR grid (25 pts vs. 15), extra sigma=1.5 panel, and
+  # 200 noise samples per point for tighter error bands.
+  noise_sensitivity:
+    enabled: true
+    snr_log_range: [0.5, 3.5]
+    snr_steps: 25
+    sigmas: [0.5, 1.0, 1.5, 2.0]
+    noise_samples: 200
+    box_size: 21
+
+  # Study 8: 8 hot-pixel counts x 6 num_sigma x 6 amplitudes x 50 samples
+  # (num_sigma: 5 values [3.0, 4.0, 5.0, 6.0, 8.0] plus null = 6 options)
+  # Fills in the hot-pixel count axis more densely (adds 2, 7, 15) and expands
+  # hot_amplitudes (adds 2x, 10x, 50x) for a more complete rejection map.
+  # Noise samples raised to 50 for less noisy line plots.
+  hot_pixel_rejection:
+    enabled: true
+    num_hot_pixels: [0, 1, 2, 3, 5, 7, 10, 15]
+    num_sigma_values: [3.0, 4.0, 5.0, 6.0, 8.0]
+    num_sigma_with_null: true
+    hot_amplitudes: [2.0, 5.0, 10.0, 20.0, 50.0, 100.0]
+    noise_samples: 50
+    snr: 100.0
+    box_size: 21
+    sigma: [1.0, 1.0]
+    offset: [0.25, 0.25]

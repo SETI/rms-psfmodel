@@ -1,0 +1,211 @@
+# defaults.yaml -- Default configuration for characterize_gauss_fit.
+#
+# All values in this file can be overridden by a user-supplied YAML file
+# passed via --config on the command line. Lists replace entirely (not append).
+# Per-study fitting overrides: add a "fitting" subsection inside any study to
+# override the global fitting defaults for that study only.
+
+# Directory where all output files (plots, CSV, JSON) are written.
+output_dir: ./gauss_fit_results
+
+# Number of parallel worker processes. 1 = sequential (default).
+# Values > 1 use concurrent.futures.ProcessPoolExecutor.
+num_workers: 1
+
+# Default number of noise realizations for stochastic studies.
+# Individual study sections may override this.
+noise_samples: 50
+
+# ---------------------------------------------------------------------------
+# Global fitting defaults (passed to find_position for every trial).
+# Any study section may include a "fitting" subsection to override these.
+# ---------------------------------------------------------------------------
+fitting:
+  # Polynomial degree for background fitting (null = no background subtraction).
+  bkgnd_degree: 2
+  # Half-size of the central region excluded from background fitting [ny, nx].
+  bkgnd_ignore_center: [2, 2]
+  # Sigma-clipping threshold for background residuals (null = disabled).
+  bkgnd_num_sigma: null
+  # Sigma-clipping threshold for PSF residuals to reject bad pixels (null = disabled).
+  num_sigma: null
+  # Maximum fraction of pixels that can be masked before fit is abandoned.
+  max_bad_frac: 0.2
+  # Whether to fit a non-zero constant base level in addition to the polynomial background.
+  allow_nonzero_base: false
+  # Whether to reparameterize fit variables as angles in [0, pi].
+  use_angular_params: true
+  # Powell optimizer convergence tolerance.
+  tolerance: 1.0e-6
+  # Maximum allowed position offset from starting point [y_limit, x_limit] in pixels.
+  search_limit: [1.5, 1.5]
+  # Maximum allowed PSF amplitude scale factor.
+  scale_limit: 1000.0
+
+# ---------------------------------------------------------------------------
+# Default PSF generation parameters used when a study does not override them.
+# ---------------------------------------------------------------------------
+generation:
+  # Amplitude multiplier applied to the normalized Gaussian pixel integrals.
+  scale: 1.5
+  # Additive base level added to the clean PSF image before background/noise injection.
+  base: 0.0
+
+# ---------------------------------------------------------------------------
+# Per-study configuration. Each study can be disabled with "enabled: false".
+# ---------------------------------------------------------------------------
+studies:
+
+  # Study 1: How box size relative to PSF sigma affects fitting accuracy.
+  box_vs_sigma:
+    enabled: true
+    # Odd box sizes to test. Minimum 5.
+    box_sizes: [5, 7, 9, 11, 13, 17, 21, 25, 31]
+    # Symmetric PSF sigma values (pixels) to test.
+    sigmas: [0.3, 0.5, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0]
+    # List of [offset_y, offset_x] pairs (fractional pixel offsets from pixel centre).
+    # Each entry produces a separate set of heatmap plots labelled by its offset.
+    # Values in [0, 0.5]: 0.0 = exactly centred, 0.5 = on the pixel boundary.
+    offsets:
+      - [0.0, 0.0]
+      - [0.25, 0.25]
+      - [0.5, 0.0]
+      - [0.0, 0.5]
+      - [0.5, 0.5]
+    # PSF rotation angle (radians). 0 = axis-aligned.
+    angle: 0.0
+    # PSF amplitude scale factor for this study.
+    scale: 1.0
+    fitting:
+      bkgnd_degree: null
+
+  # Study 2: How subpixel centering offset biases position recovery.
+  subpixel_offset:
+    enabled: true
+    # Number of evenly-spaced offset steps in each axis over offset_range.
+    offset_steps: 11
+    # Range [min, max] of offset values tested. Values outside [0, 0.5] are
+    # redundant by symmetry.
+    offset_range: [0.0, 0.5]
+    # Sigma values to use as panel variable.
+    sigmas: [0.5, 1.0, 2.0]
+    box_size: 21
+    angle: 0.0
+    fitting:
+      bkgnd_degree: null
+
+  # Study 3: Minimum detectable position offset vs. PSF sigma and SNR.
+  min_detectable_offset:
+    enabled: true
+    # Offset deltas to test (pixels). Covers sub-pixel to multi-pixel range.
+    delta_offsets: [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
+    # Symmetric sigma values to test.
+    sigmas: [0.3, 0.5, 0.8, 1.0, 1.5, 2.0, 3.0]
+    box_size: 21
+    # Noise realizations per (delta, sigma, snr) combination. Noiseless uses 1.
+    noise_samples: 50
+    # SNR values (peak / noise_rms) for stochastic conditions.
+    snr_values: [50.0, 100.0, 500.0]
+    # If true, also run a noiseless trial (numerical precision floor).
+    include_noiseless: true
+    fitting:
+      bkgnd_degree: null
+
+  # Study 4: How sigma asymmetry and rotation angle affect recovery.
+  sigma_asymmetry_angle:
+    enabled: true
+    # Ratios sigma_y / sigma_x to test.
+    sigma_ratios: [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 4.0]
+    # Number of evenly-spaced angle steps from 0 to pi (inclusive).
+    angle_steps: 13
+    # sigma_x values used as panel variable.
+    sigma_x_values: [0.5, 1.0, 2.0]
+    box_size: 25
+    offset: [0.25, 0.25]
+    fitting:
+      bkgnd_degree: null
+
+  # Study 5: How fixing/floating PSF parameters affects all output metrics.
+  constraint_modes:
+    enabled: true
+    # Fractional errors applied to sigma when sigma is fixed incorrectly.
+    # 0.0 = fixed at correct value; 0.2 = fixed at 1.2x true value; etc.
+    sigma_error_fractions: [0.0, 0.2, 0.5]
+    # Absolute angle error (radians) when angle is fixed incorrectly.
+    angle_error_rad: 0.3
+    # PSF shapes to test as [sigma_y, sigma_x] + angle (radians).
+    psf_shapes:
+      - sigma: [1.0, 1.0]
+        angle: 0.0
+      - sigma: [0.5, 1.5]
+        angle: 0.7854   # approximately pi/4
+      - sigma: [1.0, 2.0]
+        angle: 1.0472   # approximately pi/3
+    box_size: 21
+    offset: [0.25, 0.25]
+    scale: 1.5
+
+  # Study 6: How injected background and fitting model choice affect accuracy.
+  background:
+    enabled: true
+    # Amplitude of injected background as a fraction of the PSF peak.
+    background_amplitudes: [0.01, 0.1, 0.5]
+    # Polynomial degrees used when fitting the background.
+    # The study iterates over these values, overriding fitting.bkgnd_degree for
+    # each run.  When bkgnd_degrees_with_null is true the null (no background
+    # fitting) case is prepended so every degree in this list is compared against
+    # the no-background-model baseline.
+    bkgnd_degrees: [0, 1, 2]
+    # If true, also test bkgnd_degree=null (no background fitting).
+    bkgnd_degrees_with_null: true
+    # ignore_center sizes [ny, nx] to test.
+    bkgnd_ignore_centers: [[1, 1], [2, 2], [4, 4]]
+    # Background types to inject. Options: none, constant, linear, quadratic,
+    # noisy_constant.
+    background_types: [none, constant, linear, quadratic, noisy_constant]
+    box_size: 21
+    sigma: [1.0, 1.0]
+    # List of [offset_y, offset_x] pairs (fractional pixel offsets from pixel centre).
+    # Each entry produces a separate set of heatmap plots labelled by its offset.
+    offsets:
+      - [0.0, 0.0]
+      - [0.25, 0.25]
+      - [0.5, 0.5]
+
+  # Study 7: How SNR affects position, sigma, and scale recovery accuracy.
+  noise_sensitivity:
+    enabled: true
+    # Log10 range [min, max] for SNR (peak / noise_rms).
+    snr_log_range: [0.5, 3.5]
+    # Number of log-spaced SNR points.
+    snr_steps: 15
+    # Sigma values used as panel variable.
+    sigmas: [0.5, 1.0, 2.0]
+    # Noise realizations per (snr, sigma) combination.
+    noise_samples: 50
+    box_size: 21
+    # Note: offsets are randomized uniformly in [-0.5, 0.5] per trial to
+    # avoid bias from a fixed sub-pixel position.  Angle is always 0.0
+    # (axis-aligned PSF) in this study.
+
+  # Study 8: How num_sigma rejection handles hot pixels at various contamination levels.
+  hot_pixel_rejection:
+    enabled: true
+    # Numbers of hot pixels to inject.
+    num_hot_pixels: [0, 1, 3, 5, 10]
+    # num_sigma thresholds for PSF-stage bad pixel rejection.
+    # These values override fitting.num_sigma for the PSF-fit bad-pixel
+    # rejection stage.  The study iterates over num_sigma_values (and over
+    # null when num_sigma_with_null is true) to test rejection aggressiveness.
+    num_sigma_values: [3.0, 4.0, 5.0, 6.0]
+    # If true, also test with num_sigma=null (rejection disabled).
+    num_sigma_with_null: true
+    # Hot pixel amplitudes as multiples of the PSF peak.
+    hot_amplitudes: [5.0, 20.0, 100.0]
+    # Noise realizations per combination (hot pixel positions randomized).
+    noise_samples: 20
+    # SNR of background Gaussian noise (peak / noise_rms).
+    snr: 100.0
+    box_size: 21
+    sigma: [1.0, 1.0]
+    offset: [0.25, 0.25]
