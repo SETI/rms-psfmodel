@@ -77,7 +77,12 @@ def build_specs(cfg: Config) -> tuple[list[TrialSpec], list[int | None]]:
 
     for offset_y, offset_x in study.offsets:
         for bkgnd_type in study.background_types:
-            for amplitude in study.background_amplitudes:
+            # When there is no background, all amplitude values collapse to 0.0,
+            # so iterate only once to avoid producing identical duplicate trials.
+            amp_values = (
+                [0.0] if bkgnd_type == BACKGROUND_TYPE_NONE else study.background_amplitudes
+            )
+            for amplitude in amp_values:
                 for fit_degree in fit_degrees:
                     for ignore_center in study.bkgnd_ignore_centers:
                         fitting = dataclasses.replace(
@@ -85,7 +90,6 @@ def build_specs(cfg: Config) -> tuple[list[TrialSpec], list[int | None]]:
                             bkgnd_degree=fit_degree,
                             bkgnd_ignore_center=ignore_center,
                         )
-                        inj_amplitude = 0.0 if bkgnd_type == BACKGROUND_TYPE_NONE else amplitude
                         specs.append(
                             utils.make_spec(
                                 sigma_y=study.sigma[0],
@@ -99,7 +103,7 @@ def build_specs(cfg: Config) -> tuple[list[TrialSpec], list[int | None]]:
                                 fitting=fitting,
                                 fit_angle=0.0,
                                 background_type=bkgnd_type,
-                                background_amplitude=inj_amplitude,
+                                background_amplitude=amplitude,
                                 rng_seed=seed,
                             )
                         )

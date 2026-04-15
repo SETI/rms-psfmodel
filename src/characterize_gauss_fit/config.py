@@ -264,9 +264,17 @@ def _load_raw(path: pathlib.Path | None) -> dict[str, Any]:
             raise FileNotFoundError(f'Config file not found: {path}')
         with path.open('r', encoding='utf-8') as fh:
             try:
-                user_raw: dict[str, Any] = yaml.safe_load(fh) or {}
+                user_raw_loaded: dict[str, Any] | None = yaml.safe_load(fh)
             except yaml.YAMLError as exc:
                 raise ValueError(f'Failed to parse config file {path}: {exc}') from exc
+        if user_raw_loaded is None:
+            user_raw: dict[str, Any] = {}
+        elif not isinstance(user_raw_loaded, dict):
+            raise ValueError(
+                f'Config file {path} must contain a mapping, got {type(user_raw_loaded)!r}'
+            )
+        else:
+            user_raw = user_raw_loaded
         raw = _deep_merge(raw, user_raw)
 
     return raw

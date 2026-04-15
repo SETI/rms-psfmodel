@@ -27,6 +27,8 @@ from characterize_gauss_fit.trial import TrialResult, TrialSpec
 _LOG = logging.getLogger(__name__)
 _STUDY_NAME = 'subpixel_offset'
 
+_RNG_SEED_BASE = 2000  # seed range 2000+ reserved for this study to avoid RNG seed collisions
+
 # Shared grouping key definitions for JSON summary and _write_outputs.
 _GROUP_KEYS: list[tuple[str, Callable[[TrialSpec], float]]] = [
     ('sigma', lambda s: s.sigma_y),
@@ -51,7 +53,7 @@ def build_specs(cfg: Config) -> list[TrialSpec]:
     study = cfg.studies.subpixel_offset
     offsets = np.linspace(study.offset_range[0], study.offset_range[1], study.offset_steps)
     specs: list[TrialSpec] = []
-    seed = 2000  # seed range 2000+ reserved for this study to avoid RNG seed collisions
+    seed = _RNG_SEED_BASE
     for sigma in study.sigmas:
         for oy in offsets:
             for ox in offsets:

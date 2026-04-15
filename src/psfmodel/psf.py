@@ -1,6 +1,17 @@
-################################################################################
-# psfmodel/psf.py
-################################################################################
+"""Core PSF abstraction and fitting machinery for psfmodel.
+
+This module defines the abstract :class:`PSF` base class and all shared fitting
+infrastructure: background gradient estimation, sigma-clipping, Jacobian and
+covariance computation, and bounded Powell optimisation for astrometric position
+recovery.  Concrete PSF subclasses (e.g. :class:`~psfmodel.gaussian.GaussianPSF`)
+inherit from :class:`PSF` and implement the :meth:`PSF.eval` family of methods.
+
+Module-level constants:
+    _BKGND_SIGMA_FLOOR: Numerical noise floor for sigma-clipping in
+        :meth:`PSF.background_gradient_fit`.  Convergence is declared when the
+        residual standard deviation falls below this fraction of the gradient
+        scale, preventing spurious masking driven by floating-point noise.
+"""
 
 import logging
 from abc import ABC, abstractmethod

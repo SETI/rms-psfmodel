@@ -28,6 +28,8 @@ from characterize_gauss_fit.trial import TrialResult, TrialSpec
 _LOG = logging.getLogger(__name__)
 _STUDY_NAME = 'constraint_modes'
 
+_RNG_SEED_BASE = 5000
+
 
 @dataclasses.dataclass(frozen=True)
 class ConstraintMode:
@@ -75,7 +77,7 @@ def _build_modes(cfg: Config) -> list[ConstraintMode]:
         if frac == 0.0:
             label = 'sigma_fixed_correct'
         else:
-            label = f'sigma_fixed_err{int(frac * 100):d}pct'
+            label = f'sigma_fixed_err{round(frac * 100):d}pct'
         modes.append(ConstraintMode(label, frac, frac, None, sigma_is_fraction=True))
 
     # Angle fixed at true value, sigma floats.
@@ -124,7 +126,7 @@ def build_specs(cfg: Config) -> tuple[list[TrialSpec], list[ConstraintMode]]:
     study = cfg.studies.constraint_modes
     modes = _build_modes(cfg)
     specs: list[TrialSpec] = []
-    seed = 5000
+    seed = _RNG_SEED_BASE
 
     for mode in modes:
         for shape in study.psf_shapes:
@@ -198,13 +200,14 @@ def run(cfg: Config, *, num_workers: int = 1) -> None:
     )
 
     study_dir = utils.ensure_study_dir(cfg.output_dir, _STUDY_NAME)
-    _write_outputs(cfg, specs, results, study_dir, modes)
+    _write_outputs(cfg, specs, results, study_dir=study_dir, modes=modes)
 
 
 def _write_outputs(
     cfg: Config,
     specs: list[TrialSpec],
     results: list[TrialResult],
+    *,
     study_dir: pathlib.Path,
     modes: list[ConstraintMode],
 ) -> None:

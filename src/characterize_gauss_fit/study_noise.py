@@ -219,7 +219,7 @@ def _write_outputs(
         specs,
         results,
         [
-            ('snr', lambda s: round(scale / s.noise_rms, 1) if s.noise_rms > 0 else math.inf),
+            ('snr', lambda s: scale / s.noise_rms if s.noise_rms > 0 else math.inf),
             ('sigma', lambda s: s.sigma_y),
         ],
     )

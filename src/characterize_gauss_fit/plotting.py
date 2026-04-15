@@ -373,6 +373,11 @@ def plot_multi_panel_heatmaps(
     ):
         panel_display = display.copy()
         if mask_panels is not None:
+            if mask_panels[p_idx].shape != display.shape:
+                raise ValueError(
+                    f'mask_panels[{p_idx}].shape {mask_panels[p_idx].shape} does not match '
+                    f'data_panels[{p_idx}].shape {display.shape}'
+                )
             panel_display = np.where(mask_panels[p_idx], np.nan, panel_display)
 
         img = ax.imshow(
