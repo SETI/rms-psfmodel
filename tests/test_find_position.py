@@ -42,9 +42,9 @@ def test_find_position_invalid_num_sigma_raises() -> None:
         psf.find_position(img, (5, 5), (10, 10), bkgnd_degree=None, num_sigma=-1.0)
     assert 'num_sigma must be > 0' in str(exc_info.value)
 
-    with pytest.raises(TypeError) as exc_info:
+    with pytest.raises(TypeError) as exc_info_type:
         psf.find_position(img, (5, 5), (10, 10), bkgnd_degree=None, num_sigma='bad')  # type: ignore[arg-type]
-    assert 'num_sigma must be a number or None' in str(exc_info.value)
+    assert 'num_sigma must be a number or None' in str(exc_info_type.value)
 
 
 def test_find_position_returns_none_when_starting_point_near_edge() -> None:

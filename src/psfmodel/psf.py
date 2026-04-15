@@ -446,6 +446,7 @@ class PSF(ABC):
 
         a3d = PSF._background_gradient_coeffs(shape, order)
 
+        num_bad_pixels = 0
         if num_sigma is not None:
             num_bad_pixels = cast(int, ma.count_masked(image))  # type: ignore[no-untyped-call]
             if debug:  # pragma: no cover
@@ -470,7 +471,15 @@ class PSF(ABC):
                     )
                 return None, None
 
-            coeffts = linalg.lstsq(a2d, b1d)[0]
+            coeffts, _, _, _ = cast(
+                tuple[
+                    npt.NDArray[np.float64],
+                    npt.NDArray[np.float64],
+                    int,
+                    npt.NDArray[np.float64] | None,
+                ],
+                linalg.lstsq(a2d, b1d),
+            )
 
             if num_sigma is None:
                 break
@@ -651,6 +660,13 @@ class PSF(ABC):
             In addition, metadata includes two entries for each "additional
             parameter" used during optimization: one for the value and one for
             the 1-sigma uncertainty (``'param'`` and ``'param_err'``).
+
+        Raises:
+            ValueError: If ``box_size`` is not a tuple of odd positive integers.
+            TypeError: If ``num_sigma`` is not a number or None.
+            ValueError: If ``num_sigma`` is not greater than 0.
+            ValueError: If the starting point is too close to the edge of the image.
+            ValueError: If the subimage has too many pixels masked.
         """
 
         if box_size[0] < 0 or box_size[1] < 0 or box_size[0] % 2 != 1 or box_size[1] % 2 != 1:
@@ -1062,7 +1078,7 @@ class PSF(ABC):
                 starting_guess += [0.001]
             for a_min, a_max, _a_name in self._additional_params:
                 bounds += [(a_min, a_max)]
-                starting_guess.append(np.mean([a_min, a_max]))
+                starting_guess.append(cast(float, np.mean([a_min, a_max])))
 
         extra_args0 = (
             sub_img_grad,
