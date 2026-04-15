@@ -353,17 +353,13 @@ def write_json_summary(
     group_summaries: list[dict[str, Any]] = []
     for group in groups:
         if not isinstance(group, dict) or not isinstance(group.get('indices'), list):
-            raise TypeError(
-                f"Each group must be a dict with a list under 'indices', got {group!r}"
-            )
+            raise TypeError(f"Each group must be a dict with a list under 'indices', got {group!r}")
         indices: list[int] = group['indices']
         if len(indices) == 0:
             raise ValueError(f"Group 'indices' must not be empty, got {group!r}")
         for idx in indices:
             if not isinstance(idx, int):
-                raise TypeError(
-                    f"Group 'indices' must be a list of ints, got {idx!r} in {group!r}"
-                )
+                raise TypeError(f"Group 'indices' must be a list of ints, got {idx!r} in {group!r}")
             if idx < 0 or idx >= len(results):
                 raise ValueError(
                     f'Group index {idx} is out of range for results of length {len(results)}'

@@ -148,9 +148,7 @@ def plot_heatmap(
 
     if mask is not None:
         if mask.shape != data.shape:
-            raise ValueError(
-                f'mask.shape {mask.shape} does not match data.shape {data.shape}'
-            )
+            raise ValueError(f'mask.shape {mask.shape} does not match data.shape {data.shape}')
         display = np.where(mask, np.nan, display)
 
     img = ax.imshow(display, aspect='auto', cmap=cmap, origin='upper')
