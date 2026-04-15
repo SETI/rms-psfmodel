@@ -147,6 +147,10 @@ def plot_heatmap(
     cmap.set_bad(color=_FAIL_COLOUR)
 
     if mask is not None:
+        if mask.shape != data.shape:
+            raise ValueError(
+                f'mask.shape {mask.shape} does not match data.shape {data.shape}'
+            )
         display = np.where(mask, np.nan, display)
 
     img = ax.imshow(display, aspect='auto', cmap=cmap, origin='upper')
@@ -396,6 +400,7 @@ def plot_multi_panel_heatmaps(
     if img_ref is not None:
         fig.colorbar(img_ref, ax=axes, label=cbar_label, shrink=0.8)
     fig.suptitle(fig_title, fontsize=10)
+    fig.tight_layout()
 
     return fig
 

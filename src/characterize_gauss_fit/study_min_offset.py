@@ -265,14 +265,14 @@ def _write_outputs(
         )
         save_figure(fig, study_dir, f'{_STUDY_NAME}_recovery_{cond_label}.png')
 
-    write_csv(cfg.output_dir, _STUDY_NAME, specs, results)
+    write_csv(cfg.output_dir, _STUDY_NAME, specs=specs, results=results)
 
     groups = _build_json_groups(specs, results, conditions)
     write_json_summary(
         cfg.output_dir,
         _STUDY_NAME,
-        specs,
-        results,
+        specs=specs,
+        results=results,
         groups=groups,
         config_used=config_to_dict(cfg),
     )

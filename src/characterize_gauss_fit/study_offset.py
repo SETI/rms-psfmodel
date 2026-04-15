@@ -227,7 +227,7 @@ def _write_outputs(
         )
         save_figure(fig, study_dir, f'{_STUDY_NAME}_{fname_line}')
 
-    write_csv(cfg.output_dir, _STUDY_NAME, specs, results)
+    write_csv(cfg.output_dir, _STUDY_NAME, specs=specs, results=results)
 
     groups = utils.build_groups_by_keys(
         specs,
@@ -237,8 +237,8 @@ def _write_outputs(
     write_json_summary(
         cfg.output_dir,
         _STUDY_NAME,
-        specs,
-        results,
+        specs=specs,
+        results=results,
         groups=groups,
         config_used=config_to_dict(cfg),
     )

@@ -256,6 +256,10 @@ def _load_raw(path: pathlib.Path | None) -> dict[str, Any]:
             raw: dict[str, Any] = yaml.safe_load(fh)
         except yaml.YAMLError as exc:
             raise ValueError(f'Failed to parse defaults.yaml: {exc}') from exc
+        if not isinstance(raw, dict):
+            raise ValueError(
+                f'defaults.yaml must contain a mapping, got {type(raw)!r}'
+            )
 
     if path is not None:
         if not path.exists():
@@ -587,28 +591,42 @@ def _validate_config(cfg: Config) -> None:
             raise ValueError(
                 f'constraint_modes.psf_shapes: angle must be in [0, pi], got {shape.angle}'
             )
-    cmf = cm.fitting
-    if not (0.0 <= cmf.max_bad_frac <= 1.0):
-        raise ValueError(
-            f'constraint_modes.fitting.max_bad_frac must be in [0, 1], got {cmf.max_bad_frac}'
-        )
-    if cmf.num_sigma is not None and cmf.num_sigma <= 0:
-        raise ValueError(
-            f'constraint_modes.fitting.num_sigma must be None or > 0, got {cmf.num_sigma}'
-        )
-    if cmf.bkgnd_num_sigma is not None and cmf.bkgnd_num_sigma <= 0:
-        raise ValueError(
-            'constraint_modes.fitting.bkgnd_num_sigma must be None or > 0, '
-            f'got {cmf.bkgnd_num_sigma}'
-        )
-    if cmf.search_limit[0] < 0 or cmf.search_limit[1] < 0:
-        raise ValueError(
-            f'constraint_modes.fitting.search_limit values must be >= 0, got {cmf.search_limit}'
-        )
-    if cmf.scale_limit < 0:
-        raise ValueError(
-            f'constraint_modes.fitting.scale_limit must be >= 0, got {cmf.scale_limit}'
-        )
+    def _validate_fitting_config(prefix: str, fc: FittingConfig) -> None:
+        if not (0.0 <= fc.max_bad_frac <= 1.0):
+            raise ValueError(
+                f'{prefix}.max_bad_frac must be in [0, 1], got {fc.max_bad_frac}'
+            )
+        if fc.num_sigma is not None and fc.num_sigma <= 0:
+            raise ValueError(
+                f'{prefix}.num_sigma must be None or > 0, got {fc.num_sigma}'
+            )
+        if fc.bkgnd_num_sigma is not None and fc.bkgnd_num_sigma <= 0:
+            raise ValueError(
+                f'{prefix}.bkgnd_num_sigma must be None or > 0, got {fc.bkgnd_num_sigma}'
+            )
+        if fc.search_limit[0] < 0 or fc.search_limit[1] < 0:
+            raise ValueError(
+                f'{prefix}.search_limit values must be >= 0, got {fc.search_limit}'
+            )
+        if fc.scale_limit < 0:
+            raise ValueError(
+                f'{prefix}.scale_limit must be >= 0, got {fc.scale_limit}'
+            )
+
+    _validate_fitting_config('box_vs_sigma.fitting', cfg.studies.box_vs_sigma.fitting)
+    _validate_fitting_config('subpixel_offset.fitting', cfg.studies.subpixel_offset.fitting)
+    _validate_fitting_config(
+        'min_detectable_offset.fitting', cfg.studies.min_detectable_offset.fitting
+    )
+    _validate_fitting_config(
+        'sigma_asymmetry_angle.fitting', cfg.studies.sigma_asymmetry_angle.fitting
+    )
+    _validate_fitting_config('constraint_modes.fitting', cm.fitting)
+    _validate_fitting_config('background.fitting', cfg.studies.background.fitting)
+    _validate_fitting_config('noise_sensitivity.fitting', cfg.studies.noise_sensitivity.fitting)
+    _validate_fitting_config(
+        'hot_pixel_rejection.fitting', cfg.studies.hot_pixel_rejection.fitting
+    )
 
     valid_bkgnd_types = {'none', 'constant', 'linear', 'quadratic', 'noisy_constant'}
     for bt in cfg.studies.background.background_types:

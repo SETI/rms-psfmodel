@@ -24,6 +24,11 @@ except ImportError:  # pragma: no cover
 _FIT_PSF_BASE_BOUND_MIN = float('-inf')
 _FIT_PSF_BASE_BOUND_MAX = float('inf')
 
+# Relative noise floor for background_gradient_fit sigma-clipping: sigma values
+# below sqrt(eps) * gradient_scale are floating-point noise, not a real residual
+# distribution width, and should not be used to mask pixels.
+_BKGND_SIGMA_FLOOR = float(np.sqrt(np.finfo(np.float64).eps))
+
 # Finite-difference step sizes used by :meth:`PSF._find_position` when computing
 # the Jacobian of the residual vector for covariance estimation.  The step for
 # parameter ``p`` is ``max(|p| * _JACO_REL_EPS, _JACO_ABS_EPS)`` so the step is
@@ -256,7 +261,8 @@ class PSF(ABC):
             rect_size: The size of the rectangle (rect_size_y, rect_size_x) of the
                 returned PSF. Both dimensions must be odd.
             offset: The amount (offset_y, offset_x) to offset the center of the PSF. A
-                positive offset effectively moves the PSF down and to the left. XXX
+                positive offset effectively moves the PSF down and to the left in image
+                coordinates.
             movement: The total amount (my, mx) the PSF moves. The movement is assumed to
                 be centered on the given offset and exists half on either side.
             movement_granularity: The number of pixels to step for each smear while doing
@@ -386,7 +392,8 @@ class PSF(ABC):
             num_sigma: Outlier rejection uses the fit residual ``image - gradient``:
                 unmasked pixels with absolute residual at least ``num_sigma`` times the
                 standard deviation of that residual (mask-aware) are masked and the fit
-                is repeated. None disables this. Non-positive values disable masking
+                is repeated until convergence or until sigma falls below the numerical
+                noise floor. None disables this. Non-positive values disable masking
                 after the initial least-squares fit.
             debug: Set to debug bad pixel removal.
             logger: Logger for debug messages; defaults to this module's logger.
@@ -494,6 +501,13 @@ class PSF(ABC):
                 break
             sigma_f = float(sigma)
             if not np.isfinite(sigma_f) or sigma_f <= 0:
+                break
+            # Break when sigma is at the floating-point noise level (i.e., the
+            # fit is already exact up to machine precision); using such a sigma
+            # as a threshold would mask pixels based on numerical noise, not
+            # real outliers.
+            gradient_scale = float(np.max(np.abs(gradient)))
+            if gradient_scale > 0 and sigma_f <= _BKGND_SIGMA_FLOOR * gradient_scale:
                 break
             threshold = num_sigma_f * sigma_f
             if debug:  # pragma: no cover

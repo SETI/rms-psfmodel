@@ -26,7 +26,7 @@ import numpy as np
 from characterize_gauss_fit.trial import TrialResult, TrialSpec
 
 # Column order for the CSV file. Non-applicable columns use empty string.
-_CSV_COLUMNS: list[str] = [
+_CSV_COLUMNS: tuple[str, ...] = (
     # Study-level context
     'study',
     'rng_seed',
@@ -79,7 +79,7 @@ _CSV_COLUMNS: list[str] = [
     'sigma_x_err',
     'angle_err',
     'scale_err',
-]
+)
 
 
 def _float_cell(value: float | None) -> str:
@@ -165,6 +165,7 @@ def _result_row(
 def write_csv(
     output_dir: pathlib.Path,
     study: str,
+    *,
     specs: list[TrialSpec],
     results: list[TrialResult],
 ) -> pathlib.Path:
@@ -307,9 +308,9 @@ def _sanitize_json(obj: Any) -> Any:
 def write_json_summary(
     output_dir: pathlib.Path,
     study: str,
+    *,
     specs: list[TrialSpec],
     results: list[TrialResult],
-    *,
     groups: list[dict[str, Any]],
     config_used: dict[str, Any],
 ) -> pathlib.Path:
@@ -334,7 +335,10 @@ def write_json_summary(
         Path to the written JSON file.
 
     Raises:
-        ValueError: If ``specs`` and ``results`` have different lengths.
+        ValueError: If ``specs`` and ``results`` have different lengths, or if any
+            group has empty or out-of-range indices.
+        TypeError: If any group is not a dict with a ``list`` under ``'indices'``,
+            or if any index value is not an ``int``.
     """
     if len(specs) != len(results):
         raise ValueError(
@@ -348,8 +352,23 @@ def write_json_summary(
 
     group_summaries: list[dict[str, Any]] = []
     for group in groups:
+        if not isinstance(group, dict) or not isinstance(group.get('indices'), list):
+            raise TypeError(
+                f"Each group must be a dict with a list under 'indices', got {group!r}"
+            )
         indices: list[int] = group['indices']
-        group_results = [results[i] for i in indices]
+        if len(indices) == 0:
+            raise ValueError(f"Group 'indices' must not be empty, got {group!r}")
+        for idx in indices:
+            if not isinstance(idx, int):
+                raise TypeError(
+                    f"Group 'indices' must be a list of ints, got {idx!r} in {group!r}"
+                )
+            if idx < 0 or idx >= len(results):
+                raise ValueError(
+                    f'Group index {idx} is out of range for results of length {len(results)}'
+                )
+        group_results = [results[idx] for idx in indices]
         agg = _aggregate_results(group_results)
         # Write label keys (everything except 'indices').
         summary: dict[str, Any] = {k: v for k, v in group.items() if k != 'indices'}

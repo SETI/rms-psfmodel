@@ -274,7 +274,7 @@ def _write_outputs(
     )
     save_figure(fig, study_dir, f'{_STUDY_NAME}_summary.png')
 
-    write_csv(cfg.output_dir, _STUDY_NAME, specs, results)
+    write_csv(cfg.output_dir, _STUDY_NAME, specs=specs, results=results)
 
     # Each (mode, shape) pair maps to exactly one spec at a known position.
     groups: list[dict[str, Any]] = [
@@ -289,8 +289,8 @@ def _write_outputs(
     write_json_summary(
         cfg.output_dir,
         _STUDY_NAME,
-        specs,
-        results,
+        specs=specs,
+        results=results,
         groups=groups,
         config_used=config_to_dict(cfg),
     )
