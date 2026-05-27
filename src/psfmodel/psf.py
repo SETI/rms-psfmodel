@@ -14,6 +14,7 @@ Module-level constants:
 """
 
 import logging
+import math
 from abc import ABC, abstractmethod
 from typing import Any, cast
 
@@ -255,6 +256,29 @@ class PSF(ABC):
         """
         ...  # pragma: no cover
 
+    @staticmethod
+    def _smear_num_samples(movement: tuple[float, float], movement_granularity: float) -> int:
+        """Number of midpoint samples needed to honor ``movement_granularity``.
+
+        Returns ``max(1, ceil(max(|my|, |mx|) / movement_granularity))`` so the
+        per-axis sample step never exceeds ``movement_granularity`` and any non-zero
+        movement yields at least one sample.
+
+        Parameters:
+            movement: ``(my, mx)`` total motion span.
+            movement_granularity: Upper bound on the per-axis sampling step in pixels.
+
+        Returns:
+            The midpoint sample count.
+
+        Raises:
+            ValueError: If ``movement_granularity`` is not strictly positive.
+        """
+
+        if not movement_granularity > 0:
+            raise ValueError(f'movement_granularity must be positive, got {movement_granularity}')
+        return max(1, math.ceil(max(abs(movement[0]), abs(movement[1])) / movement_granularity))
+
     def _eval_rect_smeared(
         self,
         rect_size: tuple[int, int],
@@ -266,7 +290,14 @@ class PSF(ABC):
         base: float = 0.0,
         **kwargs: Any,
     ) -> npt.NDArray[np.float64]:
-        """Evaluate and sum a PSF multiple times to simulate motion blur.
+        """Evaluate and average the PSF along a linear motion path.
+
+        Approximates the motion-smeared PSF using the midpoint rule: ``S`` evaluations
+        of :meth:`_eval_rect` at uniformly-spaced positions across the movement
+        segment, averaged into a single rectangle.  The sample count ``S`` comes from
+        :meth:`_smear_num_samples` and honors ``movement_granularity`` as a per-axis
+        upper bound on the sampling step.  ``scale`` is divided by ``S`` and applied
+        per sample; ``base`` is added once at the end, so it is not paid ``S`` times.
 
         Parameters:
             rect_size: The size of the rectangle (rect_size_y, rect_size_x) of the
@@ -274,12 +305,20 @@ class PSF(ABC):
             offset: The amount (offset_y, offset_x) to offset the center of the PSF. A
                 positive offset effectively moves the PSF down and to the left in image
                 coordinates.
-            movement: The total amount (my, mx) the PSF moves. The movement is assumed to
-                be centered on the given offset and exists half on either side.
-            movement_granularity: The number of pixels to step for each smear while doing
-                motion blur.
+            movement: The total amount (my, mx) the PSF moves. The movement is centered
+                on the given offset (half on either side).  ``None`` or ``(0, 0)``
+                skips smearing and returns :meth:`_eval_rect` unchanged.
+            movement_granularity: The maximum step size (in pixels) between adjacent
+                motion samples.  Must be strictly positive.
             scale: A scale factor to apply to the resulting PSF.
             base: A scalar added to the resulting PSF.
+
+        Returns:
+            A :class:`numpy.ndarray` of dtype ``float64`` with shape ``rect_size``
+            holding the smeared, pixel-integrated PSF.
+
+        Raises:
+            ValueError: If ``movement_granularity`` is not strictly positive.
 
         Other inputs may be available for specific subclasses.
         """
@@ -287,32 +326,30 @@ class PSF(ABC):
         if movement is None or (movement[0] == 0 and movement[1] == 0):
             return self._eval_rect(rect_size, offset=offset, scale=scale, base=base, **kwargs)
 
-        num_steps = int(
-            max(abs(movement[0]) / movement_granularity, abs(movement[1]) / movement_granularity)
-        )
+        num_samples = PSF._smear_num_samples(movement, movement_granularity)
+        step_y = movement[0] / num_samples
+        step_x = movement[1] / num_samples
+        # Midpoint sampling: shift by -(num_samples - 1) / 2 so samples are symmetric
+        # about the offset, with the outermost samples a half-step in from
+        # +/- movement/2.
+        center_shift = (num_samples - 1) / 2.0
 
-        if num_steps == 0:
-            step_y = 0.0
-            step_x = 0.0
-        else:
-            step_y = movement[0] / num_steps
-            step_x = movement[1] / num_steps
+        # Pre-allocate the accumulator (avoids the previous first-iteration buffer
+        # aliasing with ``_eval_rect``'s return).  Fold 1/S into ``scale`` and add
+        # ``base`` once at the end so the per-sample ``_eval_rect`` call only pays
+        # for the PSF itself.
+        per_sample_scale = scale / num_samples
+        total_rect = np.zeros(rect_size, dtype=np.float64)
+        for step in range(num_samples):
+            offset_step = step - center_shift
+            y = offset[0] + step_y * offset_step
+            x = offset[1] + step_x * offset_step
+            total_rect += self._eval_rect(
+                rect_size, offset=(y, x), scale=per_sample_scale, base=0.0, **kwargs
+            )
 
-        total_rect = None
-
-        for step in range(num_steps + 1):
-            y = offset[0] + step_y * (step - num_steps / 2.0)
-            x = offset[1] + step_x * (step - num_steps / 2.0)
-
-            rect = self._eval_rect(rect_size, offset=(y, x), scale=scale, base=base, **kwargs)
-            if total_rect is None:
-                total_rect = rect
-            else:
-                total_rect += rect
-        if total_rect is None:
-            raise RuntimeError('Motion smear loop produced no PSF rectangles')
-
-        total_rect /= float(num_steps + 1)
+        if base != 0.0:
+            total_rect += base
 
         return total_rect
 

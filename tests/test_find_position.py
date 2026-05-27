@@ -161,8 +161,8 @@ def test_gaussian_eval_rect_with_movement_smears(symmetric_psf: GaussianPSF) -> 
     assert not np.allclose(smeared, still)
 
 
-def test_gaussian_eval_rect_movement_small_num_steps_branch(symmetric_psf: GaussianPSF) -> None:
-    """A small movement relative to ``movement_granularity`` uses the ``num_steps == 0`` path."""
+def test_gaussian_eval_rect_movement_below_granularity(symmetric_psf: GaussianPSF) -> None:
+    """A movement smaller than the granularity still produces a valid normalized rect."""
 
     rect = symmetric_psf.eval_rect(
         (19, 19),
