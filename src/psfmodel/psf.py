@@ -595,7 +595,7 @@ class PSF(ABC):
         scale_limit: float = 1000.0,
         use_angular_params: bool = True,
         compute_uncertainty: bool = True,
-    ) -> None | tuple[float, float, dict[str, Any]]:
+    ) -> tuple[float, float, dict[str, Any]] | None:
         """Find the (y, x) coordinates that best fit a 2-D PSF to an image.
 
         Parameters:
@@ -972,7 +972,7 @@ class PSF(ABC):
         allow_nonzero_base: bool,
         use_angular_params: bool,
         compute_uncertainty: bool,
-    ) -> None | tuple[float, float, dict[str, Any]]:
+    ) -> tuple[float, float, dict[str, Any]] | None:
         """Fit PSF position and shape on a fixed subimage via bounded Powell optimization.
 
         This is the inner numerical core for :meth:`find_position`: it subtracts an
