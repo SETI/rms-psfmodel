@@ -683,6 +683,182 @@ class GaussianPSF(PSF):
 
         return rect
 
+    def _resolve_sigma(
+        self,
+        *,
+        sigma: tuple[float, float] | None,
+        sigma_y: float | None,
+        sigma_x: float | None,
+        caller: str,
+    ) -> tuple[float, float]:
+        """Resolve the ``(sigma_y, sigma_x)`` pair from instance state and call kwargs.
+
+        Mirrors the precedence used by :meth:`eval_pixel`: per-call ``sigma_y`` /
+        ``sigma_x`` overrides win, then the ``sigma`` tuple, otherwise the values
+        fixed at construction.  Specifying both an instance sigma and a per-call
+        sigma for the same axis is an error.
+
+        Parameters:
+            sigma: Optional ``(sigma_y, sigma_x)`` pair from the caller.
+            sigma_y: Optional per-call override for ``sigma_y``.
+            sigma_x: Optional per-call override for ``sigma_x``.
+            caller: Name of the caller used in the "Sigma X and Y must be specified"
+                error message ("eval_pixel", "eval_rect", ...).
+
+        Returns:
+            ``(sigma_y, sigma_x)`` as floats.
+
+        Raises:
+            ValueError: If both an instance sigma and a per-call sigma are supplied
+                for the same axis, or if either axis is left unspecified.
+        """
+
+        sy = self._sigma_y
+        sx = self._sigma_x
+
+        if (sx is not None and (sigma is not None or sigma_x is not None)) or (
+            sy is not None and (sigma is not None or sigma_y is not None)
+        ):
+            raise ValueError('Cannot specify both sigma during init and sigma_y/x')
+
+        if sigma is not None:
+            sy, sx = sigma[0], sigma[1]
+
+        if sigma_y is not None:
+            sy = sigma_y
+        if sigma_x is not None:
+            sx = sigma_x
+
+        if sx is None or sy is None:
+            raise ValueError(
+                'Sigma X and Y must be specified either at object creation '
+                f'or in the call to {caller}'
+            )
+
+        return float(sy), float(sx)
+
+    # Override of :meth:`PSF._eval_rect_smeared`.  For ``angle == 0`` the pixel
+    # integrals of a 2-D Gaussian factor as ``Iy(y) * Ix(x)``, so a uniform smear
+    # along a line collapses from ``O(S * Ny * Nx)`` ``erf`` evaluations and ``S``
+    # full forward models down to ``O(S * (Ny + Nx))`` ``erf`` calls plus a single
+    # BLAS-backed outer-product sum.  When ``angle != 0`` the unrotated pixel grid
+    # breaks separability and we fall back to the base-class loop.
+    def _eval_rect_smeared(
+        self,
+        rect_size: tuple[int, int],
+        offset: tuple[float, float] = (0.5, 0.5),
+        *,
+        movement: tuple[float, float] | None = None,
+        movement_granularity: float = 0.1,
+        scale: float = 1.0,
+        base: float = 0.0,
+        sigma: tuple[float, float] | None = None,
+        sigma_y: float | None = None,
+        sigma_x: float | None = None,
+        angle: float | None = None,
+        **kwargs: Any,
+    ) -> npt.NDArray[np.float64]:
+        """Smeared rectangular Gaussian PSF; separable fast path for axis-aligned models.
+
+        Falls back to :meth:`PSF._eval_rect_smeared` (the per-sample loop) when the
+        effective rotation angle is non-zero.
+
+        Parameters:
+            rect_size: ``(size_y, size_x)`` patch shape (odd counts).
+            offset: Subpixel center shift ``(y, x)``; see :meth:`eval_rect`.
+            movement: ``(my, mx)`` total motion span centered on ``offset``; ``None``
+                or ``(0, 0)`` returns the unsmeared rectangle.
+            movement_granularity: Maximum step between adjacent samples in pixels;
+                must be strictly positive.
+            scale: Multiplicative scale for the Gaussian flux.
+            base: Additive constant per output pixel, applied once after the sum.
+            sigma: Optional ``(sigma_y, sigma_x)`` pair overriding instance sigmas.
+            sigma_y: Per-call override for ``sigma_y``.
+            sigma_x: Per-call override for ``sigma_x``.
+            angle: Per-call override for rotation angle (radians); the instance
+                default is used when ``None``.
+
+        Returns:
+            A :class:`numpy.ndarray` of dtype ``float64`` and shape ``rect_size``.
+
+        Raises:
+            ValueError: If ``movement_granularity`` is not strictly positive, or if
+                the resolved ``sigma`` pair is incomplete.
+        """
+
+        if movement is None or (movement[0] == 0 and movement[1] == 0):
+            return self._eval_rect(
+                rect_size,
+                offset=offset,
+                scale=scale,
+                base=base,
+                sigma=sigma,
+                sigma_y=sigma_y,
+                sigma_x=sigma_x,
+                angle=angle,
+                **kwargs,
+            )
+
+        r_angle = 0.0 if self._angle is None else float(self._angle)
+        if angle is not None:
+            r_angle = float(angle)
+
+        if r_angle != 0.0:
+            return PSF._eval_rect_smeared(
+                self,
+                rect_size,
+                offset=offset,
+                movement=movement,
+                movement_granularity=movement_granularity,
+                scale=scale,
+                base=base,
+                sigma=sigma,
+                sigma_y=sigma_y,
+                sigma_x=sigma_x,
+                angle=angle,
+                **kwargs,
+            )
+
+        num_samples = PSF._smear_num_samples(movement, movement_granularity)
+        sy, sx = self._resolve_sigma(
+            sigma=sigma, sigma_y=sigma_y, sigma_x=sigma_x, caller='eval_rect'
+        )
+
+        rect_size_y, rect_size_x = rect_size
+        # Midpoint sampling centered on the offset: sample_offsets is symmetric
+        # about 0 so the outermost samples sit a half-step in from +/- movement/2.
+        center_shift = (num_samples - 1) / 2.0
+        sample_offsets = np.arange(num_samples, dtype=np.float64) - center_shift
+        step_y = movement[0] / num_samples
+        step_x = movement[1] / num_samples
+        delta_y = step_y * sample_offsets
+        delta_x = step_x * sample_offsets
+
+        # Pixel-edge coordinates relative to the offset.  Folding the per-sample
+        # shift into the integration bounds (instead of the Gaussian mean) avoids
+        # passing an array ``mean`` to ``gaussian_integral_1d``, whose signature
+        # advertises a scalar mean.
+        y_centers = np.arange(-(rect_size_y // 2), rect_size_y // 2 + 1, dtype=np.float64)
+        x_centers = np.arange(-(rect_size_x // 2), rect_size_x // 2 + 1, dtype=np.float64)
+        y_lo = (y_centers - offset[0])[None, :] - delta_y[:, None]
+        y_hi = y_lo + 1.0
+        x_lo = (x_centers - offset[1])[None, :] - delta_x[:, None]
+        x_hi = x_lo + 1.0
+
+        iy = cast(
+            npt.NDArray[np.float64],
+            GaussianPSF.gaussian_integral_1d(y_lo, y_hi, sigma=sy, mean=self._mean_y),
+        )
+        ix = cast(
+            npt.NDArray[np.float64],
+            GaussianPSF.gaussian_integral_1d(x_lo, x_hi, sigma=sx, mean=self._mean_x),
+        )
+
+        rect = (scale / num_samples) * np.einsum('si,sj->ij', iy, ix)
+        if base != 0.0:
+            rect += base
+        return cast(npt.NDArray[np.float64], rect)
+
     # Same rationale as :meth:`_eval_rect` above: extends :meth:`PSF.eval_rect` with
     # Gaussian kwargs while accepting the same ``rect_size`` / ``offset`` types as the
     # base and delegating to :meth:`PSF._eval_rect_smeared`.
