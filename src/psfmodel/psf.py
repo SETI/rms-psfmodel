@@ -466,7 +466,7 @@ class PSF(ABC):
 
         num_bad_pixels = 0
         if num_sigma is not None:
-            num_bad_pixels = cast(int, ma.count_masked(image))  # type: ignore[no-untyped-call]
+            num_bad_pixels = cast(int, ma.count_masked(image))  # type: ignore[no-untyped-call, unused-ignore]
             if debug:  # pragma: no cover
                 fit_logger.debug(
                     'Background gradient fit: initial masked pixel count %s', num_bad_pixels
@@ -531,7 +531,7 @@ class PSF(ABC):
             outlier_mask = ma.filled(ma.abs(delta_img) >= threshold, False)
             image[outlier_mask] = ma.masked
 
-            new_num_bad_pixels = cast(int, ma.count_masked(image))  # type: ignore[no-untyped-call]
+            new_num_bad_pixels = cast(int, ma.count_masked(image))  # type: ignore[no-untyped-call, unused-ignore]
             if debug:  # pragma: no cover
                 fit_logger.debug(
                     'Background gradient fit: masked pixel count now %s', new_num_bad_pixels
@@ -570,7 +570,7 @@ class PSF(ABC):
         a3d = PSF._background_gradient_coeffs(rect_size, order)
         result = np.sum(bkgnd_params * a3d, axis=-1)
 
-        return cast(npt.NDArray[np.float64], result)
+        return cast(npt.NDArray[np.float64], result)  # type: ignore[redundant-cast, unused-ignore]
 
     # ==========================================================================
     #
@@ -595,7 +595,7 @@ class PSF(ABC):
         scale_limit: float = 1000.0,
         use_angular_params: bool = True,
         compute_uncertainty: bool = True,
-    ) -> None | tuple[float, float, dict[str, Any]]:
+    ) -> tuple[float, float, dict[str, Any]] | None:
         """Find the (y, x) coordinates that best fit a 2-D PSF to an image.
 
         Parameters:
@@ -819,7 +819,7 @@ class PSF(ABC):
             if num_sigma is not None:
                 sub_img[np.where(np.abs(resid) > num_sigma * resid_std)] = ma.masked
 
-            new_num_bad_pixels = cast(int, ma.count_masked(sub_img))  # type: ignore[no-untyped-call]
+            new_num_bad_pixels = cast(int, ma.count_masked(sub_img))  # type: ignore[no-untyped-call, unused-ignore]
             if new_num_bad_pixels == num_bad_pixels:
                 break
             if new_num_bad_pixels == sub_img.size:
@@ -972,7 +972,7 @@ class PSF(ABC):
         allow_nonzero_base: bool,
         use_angular_params: bool,
         compute_uncertainty: bool,
-    ) -> None | tuple[float, float, dict[str, Any]]:
+    ) -> tuple[float, float, dict[str, Any]] | None:
         """Fit PSF position and shape on a fixed subimage via bounded Powell optimization.
 
         This is the inner numerical core for :meth:`find_position`: it subtracts an

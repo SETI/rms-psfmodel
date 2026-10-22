@@ -1,7 +1,6 @@
 # rms-psfmodel
 
 <!-- pyml disable MD025 -->
-
 [![GitHub release; latest by date](https://img.shields.io/github/v/release/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/releases)
 [![GitHub Release Date](https://img.shields.io/github/release-date/SETI/rms-psfmodel)](https://github.com/SETI/rms-psfmodel/releases)
 [![Test Status](https://img.shields.io/github/actions/workflow/status/SETI/rms-psfmodel/run-tests.yml?branch=main)](https://github.com/SETI/rms-psfmodel/actions)

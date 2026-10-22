@@ -351,6 +351,7 @@ One row per trial. Columns:
 | `scale_err` | Relative scale error (fit - true) / true. |
 
 **Conventions:**
+
 - Non-applicable fields are empty strings (e.g. `sigma_y_fit` when sigma was fixed).
 - Failed / non-converged trials have `NaN` for all error fields.
 - Load with `pandas.read_csv(..., na_values=['NaN', ''])`.
